@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+import requests
+from pathlib import Path
+from tqdm import tqdm
+import urllib.request
+import time
+
+BASE_DIR = Path("inat_dataset")
+BASE_DIR.mkdir(exist_ok=True)
+
+TAXA = {
+    # --- DEADLY HARDENING (Focus on CT White & Orange Killers) ---
+    54822:  ("deadly", 1000),  # Amanita bisporigera (Destroying Angel - The "White" Trap)
+    125390: ("deadly", 800),   # Galerina marginata (Funeral Bell - The "Honey" Trap)
+    54593:  ("deadly", 800),   # Amanita phalloides (Death Cap)
+    156445: ("deadly", 600),   # Amanita muscaria var. guessowii (Yellow/Orange variety common in CT)
+
+    # --- EDIBLE REFINEMENT (Targeting High-Confidence ID) ---
+    47347:  ("edible", 1000),  # Cantharellus cibarius (Chanterelle - The "Orange" target)
+    48701:  ("edible", 1000),  # Pleurotus ostreatus (Oyster Mushroom)
+    52313:  ("edible", 1000),  # Morchella americana (Yellow Morel)
+    63510:  ("edible", 800),   # Hydnum repandum (Hedgehog Mushroom)
+
+    # --- MEDICINAL (Sustaining 91% Precision) ---
+    125134: ("medicinal", 1000), # Ganoderma curtisii (Local Reishi)
+    48431:  ("medicinal", 1000), # Inonotus obliquus (Chaga)
+    54134:  ("medicinal", 1000), # Trametes versicolor (Turkey Tail)
+
+    # --- NEGATIVE SAMPLING (Hardening "Plants" Category) ---
+    50278:  ("plants", 1000),  # Leaf Litter (Soil surface - prevent background confusion)
+    53858:  ("plants", 1000),  # Common Mosses (Pleurozium - common mushroom background)
+    47126:  ("plants", 1000),  # General Angiosperms (Flowering plants)
+}
+
+for folder in set(folder for _, (folder, _) in TAXA.items()):
+    (BASE_DIR / folder).mkdir(exist_ok=True)
+
+with open(BASE_DIR / "ATTRIBUTION.txt", "w") as f:
+    f.write("All images sourced from iNaturalist.org under CC-BY-NC-SA 4.0\n")
+    f.write("https://www.inaturalist.org/pages/api+terms\n\n")
+
+def download_observation(obs, folder):
+    if not obs.get("photos"): return False
+    photo = obs["photos"][0]
+    url = photo["url"].replace("square", "original")
+    photo_id = photo["id"]
+    ext = url.split(".")[-1].split("?")[0]
+    filename = f"{obs['id']}_{photo_id}.{ext}"
+    filepath = BASE_DIR / folder / filename
+    if filepath.exists(): return True
+    try:
+        urllib.request.urlretrieve(url, filepath)
+        taxon_name = obs.get("taxon", {}).get("name", "Unknown")
+        with open(BASE_DIR / "ATTRIBUTION.txt", "a") as f:
+            f.write(f"{filename} — iNaturalist obs {obs['id']} — {taxon_name}\n")
+        return True
+    except:
+        return False
+
+for taxon_id, (folder, target_images) in TAXA.items():
+    print(f"\nPulling {folder.upper()} — taxon_id {taxon_id} (target ~{target_images})")
+    page = 1
+    downloaded = 0
+    existing = len(list((BASE_DIR / folder).glob("*")))
+    fail_count = 0
+    max_fails = 3
+
+    with tqdm(total=target_images, initial=existing, desc=folder) as pbar:
+        while downloaded < target_images:
+            params = {
+                "taxon_id": taxon_id,
+                "place_id": 49,
+                "quality_grade": "research",
+                "photos": True,
+                "per_page": 200,
+                "page": page,
+                "order_by": "id",
+                "order": "desc"
+            }
+            try:
+                r = requests.get("https://api.inaturalist.org/v1/observations", params=params, timeout=30)
+                r.raise_for_status()
+                data = r.json()
+                fail_count = 0  # reset on success
+            except Exception as e:
+                fail_count += 1
+                print(f"\nAPI error ({fail_count}/{max_fails}): {e} — waiting 15s...")
+                if fail_count >= max_fails:
+                    print(f"Skipping taxon {taxon_id} after {max_fails} failures. Moving on.")
+                    break
+                time.sleep(15)
+                continue
+
+            if "results" not in data or not data["results"]:
+                print(" No more results — stopping.")
+                break
+
+            for obs in data["results"]:
+                if download_observation(obs, folder):
+                    downloaded += 1
+                    pbar.update(1)
+                if downloaded >= target_images: break
+            page += 1
+            time.sleep(1.0)
+
+    print(f"Finished {folder} — total: {len(list((BASE_DIR / folder).glob('*')))} images")
+
+print("\nDataset complete — ready for training!")

@@ -1,0 +1,22 @@
+{
+  "networks": [
+    {
+      "input-path": "/home/alex/Documents/Forager/forager_dataset/forager_native_legacy.h5",
+      "input-persistency": false
+    }
+  ],
+  "output-dir": "/home/alex/Documents/Forager/forager_dataset/imx500_output",
+  "quantization": {
+    "calibration": {
+      "loader": {
+        "type": "image",
+        "options": {
+          "path": "/home/alex/Documents/Forager/forager_dataset/calib_images"
+        }
+      },
+      "post_processor": {
+        "type": "mobile_net_v3"
+      }
+    }
+  }
+}

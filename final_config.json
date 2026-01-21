@@ -1,0 +1,30 @@
+{
+  "networks": [
+    {
+      "input-path": "/home/alex/Documents/Forager/forager_dataset/forager_clean_fp32.h5",
+      "input-persistency": false,
+      "inputs": {
+        "input_1": {
+          "shape": [1, 224, 224, 3]
+        }
+      },
+      "outputs": [
+        "dense/Softmax:0"
+      ]
+    }
+  ],
+  "output-dir": "/home/alex/Documents/Forager/forager_dataset/imx500_output",
+  "quantization": {
+    "calibration": {
+      "loader": {
+        "type": "image",
+        "options": {
+          "path": "/home/alex/Documents/Forager/forager_dataset/calib_images"
+        }
+      },
+      "post_processor": {
+        "type": "mobile_net_v3"
+      }
+    }
+  }
+}

@@ -1,0 +1,8 @@
+# model_script.alls
+
+# 1. Normalization
+normalization1 = normalization([0.0, 0.0, 0.0], [255.0, 255.0, 255.0])
+
+# 2. Safety Net: Force 16-bit on the layers that were overflowing
+# We list both avgpool1 and avgpool2 just to be safe
+quantization_param([forager_float32/avgpool1, forager_float32/avgpool2], precision_mode=a16_w16)

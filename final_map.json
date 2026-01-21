@@ -1,0 +1,17 @@
+{
+  "networks": [
+    {
+      "input-path": "/home/alex/Documents/Forager/forager_dataset/forager_quantized_legacy.h5",
+      "input-persistency": false,
+      "inputs": {
+        "input_1": {
+          "shape": [1, 224, 224, 3]
+        }
+      },
+      "outputs": [
+        "Identity"
+      ]
+    }
+  ],
+  "output-dir": "/home/alex/Documents/Forager/forager_dataset/imx500_output"
+}

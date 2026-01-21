@@ -1,0 +1,49 @@
+# Models and Weights
+*.h5
+*.keras
+*.tflite
+*.onnx
+*.hef
+*.har
+*.pt
+*.weights.h5
+*.scad
+*.stl
+
+# Datasets and Large Data
+*.npy
+*.tar.gz
+*.zip
+*.xz
+berry_dataset/
+berry_dataset_split/
+high_value_dataset/
+high_value_dataset_split/
+inat_dataset/
+inat_dataset_split/
+psychedelics_dataset/
+pyschedelics_dataset_v1/
+calib_images/
+plantnet_300k_v1.1.tar.gz
+
+# Training Outputs and Logs
+*.log
+logs/
+runs/
+berry_expert/
+imx500_output/
+forager_final_hailo/
+forager_for_hailo/
+forager_lite_saved_model/
+forager_saved_model_v1/
+system_reqs_results.log
+
+# Environments and Configs
+inat_env/
+.env
+.install_logs/
+
+# Python/Jupyter
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/

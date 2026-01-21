@@ -1,0 +1,9 @@
+{
+    "networks": [
+        {
+            "input_path": "forager_native_legacy.keras",
+            "input_persistency": false,
+        }
+    ],
+    "output_dir": "imx500_output"
+}
