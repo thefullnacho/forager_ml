@@ -1,0 +1,16 @@
+{
+  "model": "highvalue_expert",
+  "classes": [
+    "chaga_medicinal",
+    "chanterelles_edible",
+    "chicken_of_the_woods",
+    "ginseng_american",
+    "high_value_toxics",
+    "lions_mane",
+    "morels_edible",
+    "ostrich_fern_fiddlehead",
+    "ramps_wild_leek",
+    "reishi_northeast",
+    "saffron_crocus"
+  ]
+}

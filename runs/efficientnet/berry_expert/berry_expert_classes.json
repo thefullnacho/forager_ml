@@ -1,0 +1,16 @@
+{
+  "model": "berry_expert",
+  "classes": [
+    "bittersweet_nightshade_toxic",
+    "blackberry_common",
+    "blueberry_highbush",
+    "blueberry_wild",
+    "canada_moonseed_deadly",
+    "elderberry_american",
+    "poison_ivy",
+    "pokeweed_toxic",
+    "staghorn_sumac",
+    "virginia_creeper_toxic",
+    "wild_grape_riverbank"
+  ]
+}

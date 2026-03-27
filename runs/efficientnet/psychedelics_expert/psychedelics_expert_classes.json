@@ -1,0 +1,19 @@
+{
+  "model": "psychedelics_expert",
+  "classes": [
+    "amanita_muscaria_toxic",
+    "amanita_phalloides_deadly",
+    "conocybe_filaris_deadly",
+    "galerina_marginata_toxic",
+    "gymnopilus_junonius",
+    "other_mushroom",
+    "panaeolus_cinctulus",
+    "panax_quinquefolius_ginseng_conservation",
+    "psilocybe_azurescens",
+    "psilocybe_caerulipes",
+    "psilocybe_cubensis",
+    "psilocybe_cyanescens",
+    "psilocybe_ovoideocystidiata",
+    "psilocybe_semilanceata"
+  ]
+}
