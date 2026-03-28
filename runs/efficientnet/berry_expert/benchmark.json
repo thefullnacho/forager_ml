@@ -1,0 +1,97 @@
+{
+  "model": "berry_expert",
+  "arch": "tf_efficientnet_lite2",
+  "overall_accuracy": 0.9208,
+  "val_samples": 7802,
+  "per_class": {
+    "bittersweet_nightshade_toxic": {
+      "n": 600,
+      "precision": 0.9121,
+      "recall": 0.9517,
+      "f1": 0.9315,
+      "avg_confidence": 0.8501,
+      "safety_critical": true
+    },
+    "blackberry_common": {
+      "n": 800,
+      "precision": 0.9599,
+      "recall": 0.9287,
+      "f1": 0.9441,
+      "avg_confidence": 0.5663,
+      "safety_critical": false
+    },
+    "blueberry_highbush": {
+      "n": 800,
+      "precision": 0.8887,
+      "recall": 0.8387,
+      "f1": 0.863,
+      "avg_confidence": 0.4934,
+      "safety_critical": false
+    },
+    "blueberry_wild": {
+      "n": 800,
+      "precision": 0.8901,
+      "recall": 0.9012,
+      "f1": 0.8957,
+      "avg_confidence": 0.5479,
+      "safety_critical": false
+    },
+    "canada_moonseed_deadly": {
+      "n": 600,
+      "precision": 0.9496,
+      "recall": 0.9733,
+      "f1": 0.9613,
+      "avg_confidence": 0.869,
+      "safety_critical": true
+    },
+    "elderberry_american": {
+      "n": 800,
+      "precision": 0.9251,
+      "recall": 0.9113,
+      "f1": 0.9181,
+      "avg_confidence": 0.5598,
+      "safety_critical": false
+    },
+    "poison_ivy": {
+      "n": 800,
+      "precision": 0.8717,
+      "recall": 0.9175,
+      "f1": 0.894,
+      "avg_confidence": 0.7913,
+      "safety_critical": true
+    },
+    "pokeweed_toxic": {
+      "n": 800,
+      "precision": 0.932,
+      "recall": 0.9587,
+      "f1": 0.9452,
+      "avg_confidence": 0.8284,
+      "safety_critical": true
+    },
+    "staghorn_sumac": {
+      "n": 600,
+      "precision": 0.9381,
+      "recall": 0.935,
+      "f1": 0.9366,
+      "avg_confidence": 0.6321,
+      "safety_critical": false
+    },
+    "virginia_creeper_toxic": {
+      "n": 602,
+      "precision": 0.92,
+      "recall": 0.9169,
+      "f1": 0.9185,
+      "avg_confidence": 0.8193,
+      "safety_critical": true
+    },
+    "wild_grape_riverbank": {
+      "n": 600,
+      "precision": 0.965,
+      "recall": 0.9183,
+      "f1": 0.9411,
+      "avg_confidence": 0.6027,
+      "safety_critical": false
+    }
+  },
+  "safety_warnings": []
+}

@@ -20,37 +20,41 @@ BASE_DIR.mkdir(exist_ok=True)
 
 # { (taxon_id, ...): ("folder_name", target_count) }
 # All IDs verified 2026-03-27.
+# { (taxon_id, ...): ("folder_name", target_count, quality_grade) }
+# quality_grade defaults to "research"; rare species use "research,needs_id" to
+# pull needs_id observations too, roughly doubling the available images.
 TAXA = {
     # ── Psilocybe species ────────────────────────────────────────────────────
-    (328244,): ("psilocybe_cubensis",          3000),  # 4,662 obs
-    (179085,): ("psilocybe_cyanescens",        2500),  # 3,510 obs
-    (54025,):  ("psilocybe_semilanceata",      1500),  # 2,140 obs
-    (348835,): ("psilocybe_ovoideocystidiata", 1800),  # 2,384 obs
-    (206899,): ("psilocybe_caerulipes",         600),  # 866 obs  — capped
-    (179652,): ("psilocybe_azurescens",         400),  # 568 obs  — capped
+    (328244,): ("psilocybe_cubensis",          3000, "research"),   # 4,662 obs
+    (179085,): ("psilocybe_cyanescens",        2500, "research"),   # 3,510 obs
+    (54025,):  ("psilocybe_semilanceata",      1500, "research"),   # 2,140 obs
+    (348835,): ("psilocybe_ovoideocystidiata", 1800, "research"),   # 2,384 obs
+    # Rare species: include needs_id to expand dataset beyond research-only ceiling
+    (206899,): ("psilocybe_caerulipes",        1200, "research,needs_id"),  # ~866 research + needs_id
+    (179652,): ("psilocybe_azurescens",         800, "research,needs_id"),  # ~568 research + needs_id
 
     # ── Other psychoactive / easily confused ─────────────────────────────────
-    (83196,):  ("gymnopilus_junonius",         2000),  # 14,508 obs
-    (418443,): ("panaeolus_cinctulus",         2500),  # 3,606 obs
+    (83196,):  ("gymnopilus_junonius",         2000, "research"),   # 14,508 obs
+    (418443,): ("panaeolus_cinctulus",         2500, "research"),   # 3,606 obs
 
     # ── Deadly lookalikes (oversampled for safety) ───────────────────────────
-    (154735,): ("galerina_marginata_toxic",    5000),  # 24,269 obs
-    (48715,):  ("amanita_muscaria_toxic",      3000),  # 147,058 obs
-    (52135,):  ("amanita_phalloides_deadly",   5000),  # 12,880 obs
+    (154735,): ("galerina_marginata_toxic",    5000, "research"),   # 24,269 obs
+    (48715,):  ("amanita_muscaria_toxic",      3000, "research"),   # 147,058 obs
+    (52135,):  ("amanita_phalloides_deadly",   5000, "research"),   # 12,880 obs
     # Pholiotina rugosa used as proxy — filaris (ID 1665287) has only 324 obs
-    (877494,): ("conocybe_filaris_deadly",     2500),  # Pholiotina rugosa, 3,478 obs
+    (877494,): ("conocybe_filaris_deadly",     2500, "research"),   # Pholiotina rugosa, 3,478 obs
 
     # ── Conservation ─────────────────────────────────────────────────────────
-    (116333,): ("panax_quinquefolius_ginseng_conservation", 2500),  # 3,787 obs
+    (116333,): ("panax_quinquefolius_ginseng_conservation", 2500, "research"),  # 3,787 obs
 
     # ── OOD negative class ───────────────────────────────────────────────────
-    (47170,):  ("other_mushroom",              3000),  # Fungi broad sample
+    (47170,):  ("other_mushroom",              3000, "research"),   # Fungi broad sample
 }
 
 headers = {"User-Agent": "ForagerMLBot/2.0 (homesteaderlabs_research)"}
 
 
-def download_species(taxon_ids: tuple, folder: str, target: int):
+def download_species(taxon_ids: tuple, folder: str, target: int, quality_grade: str = "research"):
     save_path = BASE_DIR / folder
     save_path.mkdir(exist_ok=True)
 
@@ -66,7 +70,7 @@ def download_species(taxon_ids: tuple, folder: str, target: int):
     while downloaded < target:
         params = {
             "taxon_id": taxon_ids_str,
-            "quality_grade": "research",
+            "quality_grade": quality_grade,
             "has[]": "photos",
             "verifiable": "true",
             "per_page": 200,
@@ -113,8 +117,8 @@ def download_species(taxon_ids: tuple, folder: str, target: int):
 
 def main():
     print(f"Downloading psychedelics dataset → {BASE_DIR}/")
-    for taxon_ids, (folder, target) in TAXA.items():
-        download_species(taxon_ids, folder, target)
+    for taxon_ids, (folder, target, quality_grade) in TAXA.items():
+        download_species(taxon_ids, folder, target, quality_grade)
     print("\nDone.")
 
 

@@ -36,6 +36,7 @@ import os
 import sys
 import time
 
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -45,6 +46,52 @@ from PIL import ImageFile
 import timm
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True   # skip corrupt/truncated images rather than crashing
+
+# ── Safety-aware class weighting ─────────────────────────────────────────────
+
+# Classes matching these keywords get an extra safety multiplier on top of
+# inverse-frequency weighting so false negatives on deadly/toxic species are
+# penalised more heavily during training.
+SAFETY_KEYWORDS = {
+    "deadly", "toxic", "poison", "death", "destroying",
+    "galerina", "amanita_phalloides", "conocybe",
+}
+SAFETY_MULTIPLIER = 4.0
+
+
+def compute_class_weights(train_dataset: datasets.ImageFolder,
+                          safety_multiplier: float = SAFETY_MULTIPLIER) -> torch.Tensor:
+    """
+    Inverse-frequency class weights, with an extra multiplier for safety-critical classes.
+
+    Returns a FloatTensor of shape (num_classes,) normalised so the mean weight = 1.
+    """
+    counts = np.bincount([label for _, label in train_dataset.samples],
+                         minlength=len(train_dataset.classes)).astype(float)
+    counts = np.maximum(counts, 1)          # avoid division by zero for empty classes
+    weights = 1.0 / counts
+    weights /= weights.mean()               # normalise → mean weight = 1
+
+    for i, cls in enumerate(train_dataset.classes):
+        if any(kw in cls.lower() for kw in SAFETY_KEYWORDS):
+            weights[i] *= safety_multiplier
+
+    return torch.FloatTensor(weights)
+
+
+# ── MixUp ────────────────────────────────────────────────────────────────────
+
+def mixup_data(images: torch.Tensor, labels: torch.Tensor, alpha: float = 0.4):
+    """Return mixed inputs, pairs of targets, and lambda."""
+    lam = float(np.random.beta(alpha, alpha)) if alpha > 0 else 1.0
+    idx = torch.randperm(images.size(0), device=images.device)
+    mixed = lam * images + (1 - lam) * images[idx]
+    return mixed, labels, labels[idx], lam
+
+
+def mixup_criterion(criterion, logits, y_a, y_b, lam):
+    return lam * criterion(logits, y_a) + (1 - lam) * criterion(logits, y_b)
+
 
 # ── GPU diagnostics ──────────────────────────────────────────────────────────
 
@@ -108,16 +155,16 @@ def get_amp_dtype(device: torch.device) -> torch.dtype:
 
 def build_transforms(img_size: int = 224):
     """
-    Training: aggressive augmentation for FGVC (fine-grained visual classification).
+    Training: RandAugment pipeline for FGVC (fine-grained visual classification).
+    RandAugment(num_ops=2, magnitude=9) subsumes ColorJitter/RandomAffine/Grayscale
+    and is stronger overall.  RandomErasing after normalisation handles occlusion.
     Validation: deterministic center crop.
     """
     train_transform = transforms.Compose([
         transforms.RandomResizedCrop(img_size, scale=(0.6, 1.0), ratio=(0.75, 1.33)),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.05),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.3, hue=0.05),
-        transforms.RandomAffine(degrees=15, translate=(0.1, 0.1), scale=(0.9, 1.1)),
-        transforms.RandomGrayscale(p=0.05),
+        transforms.RandAugment(num_ops=2, magnitude=9),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225]),
@@ -156,22 +203,30 @@ def build_model(num_classes: int, pretrained: bool = True) -> nn.Module:
 
 # ── Training loop ────────────────────────────────────────────────────────────
 
-def train_one_epoch(model, loader, criterion, optimizer, scaler, device, amp_dtype, epoch):
+def train_one_epoch(model, loader, criterion, optimizer, scaler, device, amp_dtype, epoch,
+                    mixup_alpha: float = 0.4):
     model.train()
     running_loss = 0.0
     correct = 0
     total = 0
 
     use_amp = device.type == "cuda"
+    use_mixup = mixup_alpha > 0
 
     for batch_idx, (images, labels) in enumerate(loader):
         images, labels = images.to(device), labels.to(device)
+
+        if use_mixup:
+            images, y_a, y_b, lam = mixup_data(images, labels, mixup_alpha)
 
         optimizer.zero_grad(set_to_none=True)
 
         with torch.amp.autocast("cuda", dtype=amp_dtype, enabled=use_amp):
             logits = model(images)
-            loss = criterion(logits, labels)
+            if use_mixup:
+                loss = mixup_criterion(criterion, logits, y_a, y_b, lam)
+            else:
+                loss = criterion(logits, labels)
 
         if scaler is not None:
             # float16 path — GradScaler prevents underflow
@@ -185,7 +240,9 @@ def train_one_epoch(model, loader, criterion, optimizer, scaler, device, amp_dty
 
         running_loss += loss.item() * images.size(0)
         _, predicted = logits.max(1)
-        correct += predicted.eq(labels).sum().item()
+        # Accuracy: compare against the dominant label (y_a) for monitoring
+        ref_labels = y_a if use_mixup else labels
+        correct += predicted.eq(ref_labels).sum().item()
         total += labels.size(0)
 
         if (batch_idx + 1) % 50 == 0:
@@ -243,6 +300,10 @@ def parse_args():
                    help="Path to checkpoint to resume from")
     p.add_argument("--no-pretrained", action="store_true",
                    help="Train from scratch (not recommended)")
+    p.add_argument("--mixup-alpha", type=float, default=0.4,
+                   help="MixUp alpha (Beta distribution). 0 = disabled (default: 0.4)")
+    p.add_argument("--safety-multiplier", type=float, default=SAFETY_MULTIPLIER,
+                   help="Extra loss weight for deadly/toxic classes (default: 4.0)")
     return p.parse_args()
 
 
@@ -292,6 +353,8 @@ def main():
     print(f"Batch     : {args.batch_size}")
     print(f"Epochs    : {args.epochs}")
     print(f"LR        : {args.lr}")
+    print(f"MixUp α   : {args.mixup_alpha}")
+    print(f"Safety×   : {args.safety_multiplier}")
     print(f"Output    : {output_dir}\n")
 
     train_loader = DataLoader(
@@ -324,8 +387,12 @@ def main():
 
     model = model.to(device)
 
-    # Loss, optimizer, scheduler
-    criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
+    # Class-weighted loss — upweights rare and safety-critical classes
+    class_weights = compute_class_weights(train_dataset, args.safety_multiplier).to(device)
+    safety_classes = [c for c in classes if any(kw in c.lower() for kw in SAFETY_KEYWORDS)]
+    print(f"Safety-critical classes: {safety_classes}")
+
+    criterion = nn.CrossEntropyLoss(weight=class_weights, label_smoothing=0.1)
     optimizer = optim.AdamW(
         model.parameters(),
         lr=args.lr,
@@ -362,7 +429,8 @@ def main():
         print(f"Epoch {epoch+1}/{args.epochs}  (lr={lr_now:.6f})")
 
         train_loss, train_acc = train_one_epoch(
-            model, train_loader, criterion, optimizer, scaler, device, amp_dtype, epoch
+            model, train_loader, criterion, optimizer, scaler, device, amp_dtype, epoch,
+            mixup_alpha=args.mixup_alpha,
         )
         val_loss, val_acc = validate(model, val_loader, criterion, device, amp_dtype)
 

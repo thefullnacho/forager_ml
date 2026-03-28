@@ -31,10 +31,10 @@ TAXA = {
 
     # ── Toxic lookalikes (oversampled for safety) ────────────────────────────
     (48599,):          ("pokeweed_toxic",                4000),  # 160,899 obs
-    (50278,):          ("virginia_creeper_toxic",        3000),  # 140,516 obs
+    (50278,):          ("virginia_creeper_toxic",        6000),  # 140,516 obs — bumped for recall
     (55620,):          ("bittersweet_nightshade_toxic",  3000),  # 113,908 obs
     (130900,):         ("canada_moonseed_deadly",        3000),  # 14,090 obs  ✓ correct here
-    (58732,):          ("poison_ivy",                    4000),  # 146,801 obs
+    (58732,):          ("poison_ivy",                    7000),  # 146,801 obs — bumped for recall
 }
 
 headers = {"User-Agent": "ForagerMLBot/2.0 (homesteaderlabs_research)"}
