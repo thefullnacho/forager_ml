@@ -1,0 +1,9 @@
+{
+  "model": "domain_router",
+  "classes": [
+    "berry",
+    "mushroom",
+    "other",
+    "plant"
+  ]
+}

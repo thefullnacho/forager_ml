@@ -1,0 +1,21 @@
+# Forager Pi inference dependencies
+# Install with: pip install -r requirements_pi.txt
+#
+# hailo_platform is installed separately via the Hailo RPi package:
+#   https://github.com/hailo-ai/hailo-rpi5-examples
+# waveshare_epd is installed separately from Waveshare's repo or the HAT SD card.
+# picamera2 is pre-installed on Raspberry Pi OS.
+
+# Inference
+numpy
+
+# Voice trigger
+openai-whisper
+sounddevice
+pyttsx3
+
+# Display rendering
+Pillow
+
+# Audio backend for pyttsx3 on Pi
+# sudo apt install espeak libespeak-dev portaudio19-dev

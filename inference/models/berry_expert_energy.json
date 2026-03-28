@@ -1,0 +1,33 @@
+{
+  "model": "berry_expert",
+  "threshold_p95": -3.0614194869995117,
+  "threshold_p99": -2.619279146194458,
+  "thresholds": {
+    "p90": -3.3505637645721436,
+    "p95": -3.0614194869995117,
+    "p99": -2.619279146194458
+  },
+  "temperature": 1.0,
+  "num_samples": 7800,
+  "val_accuracy": 0.9185897435897435,
+  "energy_stats": {
+    "mean": -3.86095929145813,
+    "std": 0.4000541865825653,
+    "min": -6.1105523109436035,
+    "max": -2.125396966934204,
+    "median": -3.919787645339966
+  },
+  "classes": [
+    "bittersweet_nightshade_toxic",
+    "blackberry_common",
+    "blueberry_highbush",
+    "blueberry_wild",
+    "canada_moonseed_deadly",
+    "elderberry_american",
+    "poison_ivy",
+    "pokeweed_toxic",
+    "staghorn_sumac",
+    "virginia_creeper_toxic",
+    "wild_grape_riverbank"
+  ]
+}
