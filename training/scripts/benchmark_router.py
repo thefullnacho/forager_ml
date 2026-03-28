@@ -32,6 +32,7 @@ import os
 import sys
 
 import numpy as np
+import torch
 from pathlib import Path
 from PIL import Image, ImageFile
 
@@ -375,7 +376,7 @@ def main():
 
     # Use remapped labels for metrics; -1 means "unknown to model" (always wrong)
     labels_arr = labels_remapped
-    class_names_model = yolo_names  # what the model actually knows
+    class_names_model = model_class_names  # what the model actually knows
 
     top_preds = np.argmax(probs, axis=1)
 

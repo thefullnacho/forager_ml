@@ -49,9 +49,8 @@ TAXA = {
     # ── Inanimate / challenging backgrounds ─────────────────────────────
     # iNat doesn't have rocks/soil well-labelled, but fungi textures can be
     # confusing; cup fungi and puffballs are legitimate "hard other" targets
-    52750:  ("cup_fungi",    1000),   # Pezizomycetes — cup fungi look plant-like
-    # Slime molds — common misidentification target
-    47682:  ("slime_molds",   500),   # Myxogastria
+    # cup_fungi and slime_molds removed — taxon IDs were unreliable on iNat.
+    # The remaining 11 subclasses (17,500 images) provide sufficient "other" diversity.
 }
 
 headers = {"User-Agent": "ForagerMLBot/2.0 (homesteaderlabs_research)"}
@@ -84,6 +83,11 @@ def download_taxon(taxon_id: int, folder: str, target: int):
                 "https://api.inaturalist.org/v1/observations",
                 params=params, headers=headers, timeout=15
             )
+            # 4xx = bad taxon ID or invalid request — don't retry forever
+            if r.status_code >= 400 and r.status_code < 500:
+                print(f"\n  Bad taxon ID {taxon_id} for {folder} "
+                      f"(HTTP {r.status_code}) — skipping.")
+                break
             r.raise_for_status()
             results = r.json().get("results", [])
             if not results:

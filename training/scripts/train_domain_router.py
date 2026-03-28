@@ -205,16 +205,19 @@ def main():
     train_dataset = datasets.ImageFolder(train_dir, transform=train_transform)
     val_dataset   = datasets.ImageFolder(val_dir,   transform=val_transform)
 
-    classes = train_dataset.classes
+    classes      = train_dataset.classes
+    train_counts = np.bincount([l for _, l in train_dataset.samples], minlength=len(classes))
+    val_counts   = np.bincount([l for _, l in val_dataset.samples],   minlength=len(classes))
+
     if "other" not in classes:
         print("\nWARNING: 'other' class not found in dataset!")
         print("  The router will have no OOD awareness.")
         print("  Run: python data/acquisition/other_pull_inat.py")
         print("  Then: python training/scripts/build_router_dataset.py\n")
     else:
-        other_idx = train_dataset.class_to_idx["other"]
+        other_idx   = train_dataset.class_to_idx["other"]
         other_count = int(train_counts[other_idx])
-        max_count = int(train_counts.max())
+        max_count   = int(train_counts.max())
         if other_count < max_count * 0.10:
             print(f"\nERROR: 'other' class has only {other_count} samples "
                   f"({other_count / max_count:.1%} of largest class).")
@@ -225,8 +228,6 @@ def main():
 
     print(f"\nDataset: {dataset_dir}")
     print(f"Classes ({len(classes)}): {classes}")
-    train_counts = np.bincount([l for _, l in train_dataset.samples], minlength=len(classes))
-    val_counts   = np.bincount([l for _, l in val_dataset.samples],   minlength=len(classes))
     for i, cls in enumerate(classes):
         print(f"  {cls:<15}  train: {train_counts[i]:>5}  val: {val_counts[i]:>5}")
 

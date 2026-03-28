@@ -26,7 +26,7 @@ DOMAIN_EXPERTS: dict[str, list[str]] = {
     # "other" intentionally absent — triggers abstention (no experts invoked)
 }
 
-ROUTER_CONFIDENCE_THRESHOLD = 0.60
+ROUTER_CONFIDENCE_THRESHOLD = 0.74
 
 
 @dataclass
