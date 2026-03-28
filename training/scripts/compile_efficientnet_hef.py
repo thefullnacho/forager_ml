@@ -240,12 +240,12 @@ def main():
     ckpt_path = os.path.join(ckpt_dir, "best.pt")
     manifest_path = os.path.join(output_dir, f"{args.name}_classes.json")
 
-    if os.path.exists(ckpt_path):
+    if os.path.exists(manifest_path):
+        classes = json.load(open(manifest_path))["classes"]
+    elif os.path.exists(ckpt_path):
         import torch
         ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
         classes = ckpt["classes"]
-    elif os.path.exists(manifest_path):
-        classes = json.load(open(manifest_path))["classes"]
     else:
         # Derive from dataset directory
         dataset_dir = args.dataset

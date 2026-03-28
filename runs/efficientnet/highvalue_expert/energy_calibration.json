@@ -1,0 +1,33 @@
+{
+  "model": "highvalue_expert",
+  "threshold_p95": -3.416698455810547,
+  "threshold_p99": -2.8287956714630127,
+  "thresholds": {
+    "p90": -3.5282857418060303,
+    "p95": -3.416698455810547,
+    "p99": -2.8287956714630127
+  },
+  "temperature": 1.0,
+  "num_samples": 6705,
+  "val_accuracy": 0.9739000745712155,
+  "energy_stats": {
+    "mean": -3.8143129348754883,
+    "std": 0.26519304513931274,
+    "min": -5.501294136047363,
+    "max": -2.063647508621216,
+    "median": -3.843533515930176
+  },
+  "classes": [
+    "chaga_medicinal",
+    "chanterelles_edible",
+    "chicken_of_the_woods",
+    "ginseng_american",
+    "high_value_toxics",
+    "lions_mane",
+    "morels_edible",
+    "ostrich_fern_fiddlehead",
+    "ramps_wild_leek",
+    "reishi_northeast",
+    "saffron_crocus"
+  ]
+}

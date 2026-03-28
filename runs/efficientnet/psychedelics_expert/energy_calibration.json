@@ -1,0 +1,36 @@
+{
+  "model": "psychedelics_expert",
+  "threshold_p95": -3.132890224456787,
+  "threshold_p99": -2.7006876468658447,
+  "thresholds": {
+    "p90": -3.414914608001709,
+    "p95": -3.132890224456787,
+    "p99": -2.7006876468658447
+  },
+  "temperature": 1.0,
+  "num_samples": 6915,
+  "val_accuracy": 0.9127982646420825,
+  "energy_stats": {
+    "mean": -4.013773441314697,
+    "std": 0.44389808177948,
+    "min": -6.755592346191406,
+    "max": -1.880510687828064,
+    "median": -4.065001010894775
+  },
+  "classes": [
+    "amanita_muscaria_toxic",
+    "amanita_phalloides_deadly",
+    "conocybe_filaris_deadly",
+    "galerina_marginata_toxic",
+    "gymnopilus_junonius",
+    "other_mushroom",
+    "panaeolus_cinctulus",
+    "panax_quinquefolius_ginseng_conservation",
+    "psilocybe_azurescens",
+    "psilocybe_caerulipes",
+    "psilocybe_cubensis",
+    "psilocybe_cyanescens",
+    "psilocybe_ovoideocystidiata",
+    "psilocybe_semilanceata"
+  ]
+}
