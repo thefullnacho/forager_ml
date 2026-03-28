@@ -1,0 +1,74 @@
+# EfficientNet-B2 Hailo DFC configuration for Hailo-8L
+#
+# Adapted from Hailo Model Zoo efficientnet.yaml for the Forager
+# specialist classification pipeline.
+#
+# Key difference from stock config: no end activation layer.
+# The ONNX model is exported with --no-activation so the HEF
+# outputs raw logits for energy-based OOD detection.
+#
+# Usage:
+#   This config documents the DFC compilation parameters.
+#   The actual compilation is handled by compile_efficientnet_hef.py
+#   which uses the ClientRunner Python API directly.
+
+model:
+  model_name: efficientnet_b2
+  hw_arch: hailo8l
+  input_shape: [1, 3, 224, 224]     # NCHW — PyTorch convention
+  output_type: raw_logits            # no softmax/sigmoid
+
+  # ONNX export settings
+  onnx:
+    opset: 11
+    input_names: ["input"]
+    output_names: ["output"]
+    dynamic_axes: null               # fixed batch for Hailo
+
+quantization:
+  calibration:
+    samples: 1200                    # DFC needs 1024+ for opt level > 0
+    format: nhwc_float32             # (N, 224, 224, 3) in [0, 255]
+    source: training_images          # sampled evenly across classes
+
+  optimization:
+    level: auto                      # DFC default — balanced speed/accuracy
+    batch_size: 8
+
+# Specialist model variants
+# Each uses the same base config, different dataset + class count
+specialists:
+  psychedelics_expert:
+    num_classes: 12
+    dataset: psychedelics_dataset
+    dataset_split: psychedelics_dataset_split
+
+  berry_expert:
+    num_classes: 11
+    dataset: berry_dataset
+    dataset_split: berry_dataset_split
+
+  highvalue_expert:
+    num_classes: 12
+    dataset: high_value_dataset
+    dataset_split: high_value_dataset_split
+
+# Router uses MobileNetV3-Small (separate config)
+# Included here for reference only
+router:
+  architecture: mobilenetv3_small
+  num_classes: 4                     # mushroom, berry, plant, other
+  note: separate training + compilation pipeline
+
+# Post-processing (on Pi 5 CPU, not in HEF)
+postprocessing:
+  energy_score:
+    formula: "-T * log(sum(exp(logits / T)))"
+    default_temperature: 1.0
+    rejection_percentile: 95         # calibrated per model
+
+  temperature_scaling:
+    default_T: 1.5
+    note: calibrate on held-out val set per model
+
+  output_format: float32             # set via HailoRT output.set_format_type(FormatType.FLOAT32)
