@@ -20,18 +20,23 @@ echo "  retrain_router.sh — waiting for 'other' download..."
 echo "========================================================"
 
 # Wait for other class download (PID 1258691)
+# Note: use kill -0 polling — wait only works on child processes of this shell
 OTHER_PID=1258691
-if kill -0 "$OTHER_PID" 2>/dev/null; then
-    echo "  Waiting for PID $OTHER_PID (other_pull_inat.py)..."
-    wait "$OTHER_PID" || true
-fi
+while kill -0 "$OTHER_PID" 2>/dev/null; do
+    count=$(find inat_dataset/other -name "*.jpg" 2>/dev/null | wc -l)
+    echo "  Waiting for other_pull_inat.py (PID $OTHER_PID) — ${count}/19000 images..."
+    sleep 30
+done
+echo "  other_pull_inat.py done."
 
 # Also wait for medicinals download if still running (PID 1255794)
 MED_PID=1255794
-if kill -0 "$MED_PID" 2>/dev/null; then
-    echo "  Waiting for PID $MED_PID (medicinals_pull_inat.py)..."
-    wait "$MED_PID" || true
-fi
+while kill -0 "$MED_PID" 2>/dev/null; do
+    count=$(find medicinals_dataset -name "*.jpg" 2>/dev/null | wc -l)
+    echo "  Waiting for medicinals_pull_inat.py (PID $MED_PID) — ${count}/76000 images..."
+    sleep 60
+done
+echo "  medicinals_pull_inat.py done."
 
 echo ""
 echo "Downloads complete. Rebuilding router dataset..."

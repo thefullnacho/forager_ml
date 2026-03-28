@@ -62,15 +62,24 @@ def compute_class_weights(train_dataset, other_weight: float) -> torch.FloatTens
         minlength=len(train_dataset.classes)
     ).astype(float)
     counts = np.maximum(counts, 1)
-    weights = 1.0 / counts
+
+    # Cap counts at the median to prevent extreme imbalance from blowing up
+    # the loss for tiny classes (e.g., 119 "other" vs 12k berry).
+    # A severely underrepresented class needs more DATA, not a 200× loss weight.
+    median_count = float(np.median(counts))
+    counts_capped = np.maximum(counts, median_count * 0.25)
+
+    weights = 1.0 / counts_capped
     weights /= weights.mean()
 
-    # Boost "other" class weight
+    # Boost "other" class weight modestly (2× is plenty — don't go higher)
     for i, cls in enumerate(train_dataset.classes):
         if cls == "other":
             weights[i] *= other_weight
             print(f"  Boosted 'other' class weight × {other_weight:.1f} → {weights[i]:.3f}")
 
+    print(f"  Class counts : {dict(zip(train_dataset.classes, counts.astype(int)))}")
+    print(f"  Class weights: {dict(zip(train_dataset.classes, weights.round(3)))}")
     return torch.FloatTensor(weights)
 
 
@@ -202,6 +211,17 @@ def main():
         print("  The router will have no OOD awareness.")
         print("  Run: python data/acquisition/other_pull_inat.py")
         print("  Then: python training/scripts/build_router_dataset.py\n")
+    else:
+        other_idx = train_dataset.class_to_idx["other"]
+        other_count = int(train_counts[other_idx])
+        max_count = int(train_counts.max())
+        if other_count < max_count * 0.10:
+            print(f"\nERROR: 'other' class has only {other_count} samples "
+                  f"({other_count / max_count:.1%} of largest class).")
+            print("  Training with this imbalance will produce a broken model.")
+            print("  Wait for other_pull_inat.py to finish and rebuild the dataset.")
+            print("  Run: python training/scripts/build_router_dataset.py")
+            sys.exit(1)
 
     print(f"\nDataset: {dataset_dir}")
     print(f"Classes ({len(classes)}): {classes}")
