@@ -54,6 +54,10 @@ DATASETS = {
         REPO_ROOT / "high_value_dataset",
         REPO_ROOT / "high_value_dataset_split",
     ),
+    "medicinals": (
+        REPO_ROOT / "medicinals_dataset",
+        REPO_ROOT / "medicinals_dataset_split",
+    ),
 }
 
 
