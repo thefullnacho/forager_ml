@@ -42,10 +42,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 # ── Source datasets ──────────────────────────────────────────────────────────
 
-BERRY_DATASET       = REPO_ROOT / "berry_dataset"
-HIGHVALUE_DATASET   = REPO_ROOT / "high_value_dataset"
+BERRY_DATASET        = REPO_ROOT / "berry_dataset"
+HIGHVALUE_DATASET    = REPO_ROOT / "high_value_dataset"
 PSYCHEDELICS_DATASET = REPO_ROOT / "psychedelics_dataset"
-INAT_DATASET        = REPO_ROOT / "inat_dataset"
+MEDICINALS_DATASET   = REPO_ROOT / "medicinals_dataset"
+INAT_DATASET         = REPO_ROOT / "inat_dataset"
 
 # ── Output ───────────────────────────────────────────────────────────────────
 
@@ -137,7 +138,18 @@ def gather_sources():
             if imgs:
                 ROUTER_CLASSES["plant"].append((f"hv_{cls_dir.name}", imgs))
 
-    # 2) iNaturalist plants
+    # 2) Medicinals dataset (all classes are plants — safe and toxic lookalikes)
+    if MEDICINALS_DATASET.is_dir():
+        for cls_dir in sorted(MEDICINALS_DATASET.iterdir()):
+            if cls_dir.is_dir():
+                imgs = collect_images(cls_dir)
+                if imgs:
+                    ROUTER_CLASSES["plant"].append((f"med_{cls_dir.name}", imgs))
+    else:
+        print(f"  NOTE: {MEDICINALS_DATASET} not found — medicinals will be absent from plant class.")
+        print(f"        Run: python data/acquisition/medicinals_pull_inat.py")
+
+    # 3) iNaturalist plants
     inat_plants = INAT_DATASET / "plants"
     if inat_plants.is_dir():
         imgs = collect_images(inat_plants)
