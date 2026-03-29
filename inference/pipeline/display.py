@@ -35,6 +35,8 @@ Safety colours (grayscale eInk):
   UNKNOWN -> DARK_GRAY bg  / WHITE fg
 """
 
+import os
+
 from PIL import Image, ImageDraw, ImageFont
 
 from .convergence import ForagerResult
@@ -53,6 +55,14 @@ BANNER_H = 36
 CONTENT_TOP = HEADER_H + 8
 CONTENT_BOT = HEIGHT - BANNER_H
 X_PAD = 12
+
+# Illustration zone (right side of content area)
+ILLUS_W    = 184
+ILLUS_H    = CONTENT_BOT - CONTENT_TOP   # full content height
+ILLUS_X    = WIDTH - ILLUS_W             # right-aligned
+TEXT_MAX_W = ILLUS_X - X_PAD - 4        # text zone width
+
+ILLUSTRATIONS_DIR = os.path.join(os.path.dirname(__file__), "..", "illustrations")
 
 SAFETY_BG: dict[str, int] = {
     "SAFE":    LIGHT_GRAY,
@@ -106,6 +116,24 @@ def _centered_text(draw: ImageDraw.Draw, text: str, font, y: int, fill: int):
     bbox = draw.textbbox((0, 0), text, font=font)
     x = (WIDTH - (bbox[2] - bbox[0])) // 2
     draw.text((x, y), text, font=font, fill=fill)
+
+
+def _load_illustration(species_key: str) -> Image.Image | None:
+    """
+    Load a pre-processed illustration PNG for the species.
+    Returns None if not found — caller renders text-only layout.
+    """
+    path = os.path.join(ILLUSTRATIONS_DIR, f"{species_key}.png")
+    if not os.path.exists(path):
+        return None
+    try:
+        img = Image.open(path).convert("L")
+        # Resize to fit the zone if needed (should already be correct size)
+        if img.size != (ILLUS_W, ILLUS_H):
+            img = img.resize((ILLUS_W, ILLUS_H), Image.LANCZOS)
+        return img
+    except Exception:
+        return None
 
 
 def _draw_header(draw: ImageDraw.Draw, subtitle: str = ""):
@@ -198,53 +226,64 @@ def render_abstention(result: ForagerResult) -> Image.Image:
 def render(result: ForagerResult) -> Image.Image:
     """
     Full 4-gray render for a committed identification result.
-    Used for both confident IDs and low-confidence expert results.
+
+    If an illustration exists for the species it is placed on the right side
+    and text is constrained to the left zone. Falls back to full-width text
+    layout when no illustration is available.
     """
     img  = Image.new("L", (WIDTH, HEIGHT), WHITE)
     draw = ImageDraw.Draw(img)
 
-    font_domain  = _load_font(12, bold=True)
-    font_species = _load_font(22, bold=True)
-    font_sci     = _load_font(13)
-    font_conf    = _load_font(15, bold=True)
-    font_detail  = _load_font(12)
+    font_species = _load_font(20, bold=True)
+    font_sci     = _load_font(12)
+    font_conf    = _load_font(14, bold=True)
+    font_detail  = _load_font(11)
 
     _draw_header(draw, subtitle=result.domain.upper())
 
+    # ── Illustration (right zone) ─────────────────────────────────────────────
+    illus = None if result.low_confidence else _load_illustration(result.species)
+
+    if illus is not None:
+        # Paste illustration into the right zone
+        img.paste(illus, (ILLUS_X, CONTENT_TOP))
+        # Thin separator line between text and illustration
+        draw.line([(ILLUS_X - 2, CONTENT_TOP), (ILLUS_X - 2, CONTENT_BOT)], fill=LIGHT_GRAY, width=1)
+        text_w = TEXT_MAX_W
+    else:
+        text_w = WIDTH - X_PAD * 2
+
     y = CONTENT_TOP
 
-    # ── Species name ──────────────────────────────────────────────────────────
+    # ── Species name & details ────────────────────────────────────────────────
     if result.low_confidence:
         draw.text((X_PAD, y), "LOW CONFIDENCE", font=font_species, fill=DARK_GRAY)
-        y += 30
-        draw.text((X_PAD, y), result.domain.upper(), font=font_domain, fill=DARK_GRAY)
-        y += 20
-        draw.text((X_PAD, y), "Ensure good lighting and a clear", font=font_detail, fill=DARK_GRAY)
-        y += 16
-        draw.text((X_PAD, y), "view of the subject.", font=font_detail, fill=DARK_GRAY)
+        y += 28
+        draw.text((X_PAD, y), "Ensure good lighting", font=font_detail, fill=DARK_GRAY)
+        y += 15
+        draw.text((X_PAD, y), "and a clear view.", font=font_detail, fill=DARK_GRAY)
     else:
         raw_name = result.species.replace("_", " ").title()
-        # Strip trailing " Toxic" / " Deadly" from display name — banner handles safety
+        # Strip safety suffixes — the banner communicates that
         display_name = raw_name.replace(" Toxic", "").replace(" Deadly", "").strip()
-        draw.text((X_PAD, y), _truncate(draw, display_name, font_species, WIDTH - X_PAD * 2), font=font_species, fill=BLACK)
-        y += 28
+        draw.text((X_PAD, y), _truncate(draw, display_name, font_species, text_w), font=font_species, fill=BLACK)
+        y += 26
 
-        draw.text((X_PAD, y), _truncate(draw, result.scientific_name, font_sci, WIDTH - X_PAD * 2), font=font_sci, fill=DARK_GRAY)
+        draw.text((X_PAD, y), _truncate(draw, result.scientific_name, font_sci, text_w), font=font_sci, fill=DARK_GRAY)
+        y += 18
+
+        draw.text((X_PAD, y), f"Confidence: {int(result.confidence * 100)}%", font=font_conf, fill=BLACK)
         y += 20
 
-        # ── Confidence ────────────────────────────────────────────────────────
-        draw.text((X_PAD, y), f"Confidence: {int(result.confidence * 100)}%", font=font_conf, fill=BLACK)
-        y += 22
-
-        # ── Lookalike ─────────────────────────────────────────────────────────
+        # ── Lookalike warning ─────────────────────────────────────────────────
         if result.lookalike and result.lookalike != "N/A":
-            draw.line([(X_PAD, y), (WIDTH - X_PAD, y)], fill=LIGHT_GRAY, width=1)
-            y += 6
-            lk = _truncate(draw, f"Lookalike: {result.lookalike}", font_detail, WIDTH - X_PAD * 2)
+            draw.line([(X_PAD, y), (X_PAD + text_w, y)], fill=LIGHT_GRAY, width=1)
+            y += 5
+            lk = _truncate(draw, f"Lookalike: {result.lookalike}", font_detail, text_w)
             draw.text((X_PAD, y), lk, font=font_detail, fill=DARK_GRAY)
-            y += 16
+            y += 14
             if result.key_diff:
-                kd = _truncate(draw, result.key_diff, font_detail, WIDTH - X_PAD * 2)
+                kd = _truncate(draw, result.key_diff, font_detail, text_w)
                 draw.text((X_PAD, y), kd, font=font_detail, fill=DARK_GRAY)
 
     _draw_banner(draw, result.safety)

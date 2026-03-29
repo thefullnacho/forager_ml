@@ -80,6 +80,21 @@ rsync -avz --progress $DRY \
     --exclude="*.onnx" \
     "$INFERENCE_DIR/models/" "$PI_HOST:$REMOTE_DIR/models/"
 
+# ── Sync illustrations (only if directory exists and has files) ───────────────
+ILLUS_DIR="$INFERENCE_DIR/illustrations"
+if [[ -d "$ILLUS_DIR" ]] && [[ -n "$(ls "$ILLUS_DIR"/*.png 2>/dev/null)" ]]; then
+    echo ""
+    echo "  Syncing illustrations ..."
+    ssh "$PI_HOST" "mkdir -p $REMOTE_DIR/illustrations"
+    rsync -avz --progress $DRY \
+        --include="*.png" \
+        --exclude="*" \
+        "$ILLUS_DIR/" "$PI_HOST:$REMOTE_DIR/illustrations/"
+else
+    echo ""
+    echo "  Illustrations: none yet (run data/acquisition/fetch_illustrations.py)"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
