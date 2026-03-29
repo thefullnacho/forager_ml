@@ -116,8 +116,15 @@ def build_speech_message(result) -> str:
         "UNKNOWN": "safety unknown. Do not consume.",
     }
 
-    if result.is_unknown or result.low_confidence:
-        return "No confident identification. Please try again."
+    if result.is_unknown:
+        if result.domain == "other":
+            return "Not a foraging target. Point the camera at a berry, mushroom, or plant."
+        else:
+            # Router saw a domain but was below confidence threshold — likely positioning
+            return "Could not identify. Move closer, 4 to 6 inches from the subject, and try again."
+
+    if result.low_confidence:
+        return "Too uncertain to identify. Ensure good lighting and a clear view, then try again."
 
     name   = result.species.replace("_", " ").title()
     phrase = safety_phrases.get(result.safety, "safety unknown.")

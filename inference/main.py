@@ -112,7 +112,10 @@ def main():
                     print("\n" + "-" * 40)
                     print(f"  Domain : {result.domain}")
                     if result.is_unknown:
-                        print("  Result : UNKNOWN — domain not recognized")
+                        if result.domain == "other":
+                            print("  Result : NOT A FORAGING TARGET")
+                        else:
+                            print(f"  Result : LOW ROUTER CONFIDENCE ({result.domain} @ below threshold) — reposition")
                     elif result.low_confidence:
                         print(f"  Result : LOW CONFIDENCE ({result.expert_model})")
                     else:
