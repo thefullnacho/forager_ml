@@ -99,6 +99,9 @@ def main():
                     if not running:
                         break
 
+                    if not args.no_display:
+                        display.show_scanning()
+
                     print("Capturing ...")
                     image = cam.capture()
 

@@ -1,12 +1,17 @@
 """
 display.py — Render ForagerResult to the Waveshare 3.7" e-Paper HAT (480x280).
 
-Driver: epd3in7 (4-gray mode for better text rendering)
+Driver: epd3in7 (4-gray mode for identifications, 1-bit mode for fast states)
 Library: waveshare_epd (assumed installed on Pi at /usr/local/lib or ~/waveshare)
 
-Layout (480 wide x 280 tall, landscape, single result):
+Refresh strategy:
+  Scanning state  → 1-bit fast refresh (~0.3s)  — shown while inference runs
+  Abstention      → 1-bit fast refresh (~0.3s)  — reposition / not a target
+  Identification  → 4-gray full refresh (~2.5s) — worth the wait for readability
+
+Layout (480 wide x 280 tall, landscape):
   +--------------------------------------------------------------+
-  |  FORAGER                                        [header 24px]|
+  | FORAGER                                        [header 24px] |
   +--------------------------------------------------------------+
   |                                                              |
   |  Domain: BERRY                                               |
@@ -19,9 +24,9 @@ Layout (480 wide x 280 tall, landscape, single result):
   |  Lookalike: Pokeweed (young)                                 |
   |  Pokeweed has smooth stems, white flowers                    |
   |                                                              |
-  |  [             SAFE             ]   <- safety banner         |
-  |                                                              |
-  +--------------------------------------------------------------+
+  +------+-------------------------------------------------------+
+  |SAFE  |  [safety banner 36px]                                 |
+  +------+-------------------------------------------------------+
 
 Safety colours (grayscale eInk):
   SAFE    -> LIGHT_GRAY bg / BLACK fg
@@ -34,7 +39,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .convergence import ForagerResult
 
-# ── Display constants ─────────────────────────────────────────────────────────
+# ── Display constants ──────────────────────────────────────────────────────────
 WIDTH  = 480
 HEIGHT = 280
 
@@ -42,6 +47,12 @@ BLACK      = 0
 DARK_GRAY  = 85
 LIGHT_GRAY = 170
 WHITE      = 255
+
+HEADER_H = 24
+BANNER_H = 36
+CONTENT_TOP = HEADER_H + 8
+CONTENT_BOT = HEIGHT - BANNER_H
+X_PAD = 12
 
 SAFETY_BG: dict[str, int] = {
     "SAFE":    LIGHT_GRAY,
@@ -56,13 +67,12 @@ SAFETY_FG: dict[str, int] = {
     "UNKNOWN": WHITE,
 }
 SAFETY_LABEL: dict[str, str] = {
-    "SAFE":    "SAFE",
-    "CAUTION": "CAUTION",
-    "DEADLY":  "DO NOT EAT",
+    "SAFE":    "SAFE TO EAT",
+    "CAUTION": "USE CAUTION",
+    "DEADLY":  "DO NOT EAT — DEADLY",
     "UNKNOWN": "UNKNOWN",
 }
 
-# Font paths
 FONT_PATHS = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
@@ -70,8 +80,10 @@ FONT_PATHS = [
 ]
 
 
+# ── Font helpers ───────────────────────────────────────────────────────────────
+
 def _load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    candidates = FONT_PATHS if not bold else [FONT_PATHS[0]] + FONT_PATHS[1:]
+    candidates = [FONT_PATHS[0]] + FONT_PATHS[1:] if bold else FONT_PATHS
     for path in candidates:
         try:
             return ImageFont.truetype(path, size)
@@ -89,127 +101,174 @@ def _truncate(draw: ImageDraw.Draw, text: str, font, max_px: int) -> str:
     return text + "..."
 
 
-# ── Main renderer ─────────────────────────────────────────────────────────────
+def _centered_text(draw: ImageDraw.Draw, text: str, font, y: int, fill: int):
+    """Draw text horizontally centered on the display."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    x = (WIDTH - (bbox[2] - bbox[0])) // 2
+    draw.text((x, y), text, font=font, fill=fill)
 
-def render(result: ForagerResult) -> Image.Image:
+
+def _draw_header(draw: ImageDraw.Draw, subtitle: str = ""):
+    """Draw the FORAGER header strip."""
+    draw.rectangle([(0, 0), (WIDTH, HEADER_H)], fill=DARK_GRAY)
+    font = _load_font(12, bold=True)
+    draw.text((6, 5), "FORAGER", font=font, fill=WHITE)
+    if subtitle:
+        bbox = draw.textbbox((0, 0), subtitle, font=font)
+        draw.text((WIDTH - bbox[2] - 8, 5), subtitle, font=font, fill=LIGHT_GRAY)
+
+
+def _draw_banner(draw: ImageDraw.Draw, safety: str):
+    """Draw the safety banner at the bottom."""
+    bg = SAFETY_BG.get(safety, DARK_GRAY)
+    fg = SAFETY_FG.get(safety, WHITE)
+    label = SAFETY_LABEL.get(safety, "UNKNOWN")
+    font = _load_font(15, bold=True)
+
+    banner_top = HEIGHT - BANNER_H
+    draw.rectangle([(0, banner_top), (WIDTH, HEIGHT)], fill=bg)
+    bbox = draw.textbbox((0, 0), label, font=font)
+    bx = (WIDTH - (bbox[2] - bbox[0])) // 2
+    by = banner_top + (BANNER_H - (bbox[3] - bbox[1])) // 2
+    draw.text((bx, by), label, font=font, fill=fg)
+
+
+# ── State renders ──────────────────────────────────────────────────────────────
+
+def render_scanning() -> Image.Image:
     """
-    Build a 480x280 grayscale PIL image from a ForagerResult.
-
-    Single-result layout: domain header, species name, scientific name,
-    confidence, lookalike warning, and a full-width safety banner.
-
-    Returns:
-        PIL Image in 'L' mode, ready for epd3in7 4-gray display.
+    Fast 1-bit image shown while inference is running.
+    Displayed via 1-bit partial refresh — appears almost instantly.
     """
     img  = Image.new("L", (WIDTH, HEIGHT), WHITE)
     draw = ImageDraw.Draw(img)
 
-    font_header  = _load_font(12, bold=True)
-    font_domain  = _load_font(13, bold=True)
-    font_species = _load_font(22, bold=True)
-    font_sci     = _load_font(14)
-    font_conf    = _load_font(16, bold=True)
-    font_detail  = _load_font(12)
-    font_banner  = _load_font(16, bold=True)
+    _draw_header(draw, subtitle="SCANNING")
 
-    max_text_w = WIDTH - 20  # 10px padding each side
-    x_pad = 10
+    font_large = _load_font(28, bold=True)
+    font_small = _load_font(13)
 
-    # ── Header strip ────────────────────────────────────────────────────────
-    header_h = 24
-    draw.rectangle([(0, 0), (WIDTH, header_h)], fill=DARK_GRAY)
-    draw.text((6, 5), "FORAGER", font=font_header, fill=WHITE)
+    _centered_text(draw, "SCANNING...", font_large, 80, DARK_GRAY)
+    _centered_text(draw, "Hold camera 4–6\" from subject", font_small, 128, DARK_GRAY)
 
-    y = header_h + 8
+    # Simple progress bar outline as a visual hint
+    bar_x, bar_y, bar_w, bar_h = X_PAD, 155, WIDTH - X_PAD * 2, 8
+    draw.rectangle([(bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h)], outline=DARK_GRAY, width=1)
 
-    if result.is_unknown and result.low_confidence:
-        # Unknown domain — show a centered message
-        draw.text(
-            (x_pad, y + 20),
-            "DOMAIN NOT RECOGNIZED",
-            font=font_species,
-            fill=DARK_GRAY,
-        )
-        draw.text(
-            (x_pad, y + 50),
-            "Router confidence too low. Try a clearer photo.",
-            font=font_detail,
-            fill=DARK_GRAY,
-        )
-    else:
-        # ── Domain label ────────────────────────────────────────────────────
-        domain_text = f"Domain: {result.domain.upper()}"
-        draw.text((x_pad, y), domain_text, font=font_domain, fill=DARK_GRAY)
-        y += 22
-
-        # ── Species name ────────────────────────────────────────────────────
-        if result.low_confidence:
-            species_text = "LOW CONFIDENCE"
-            sci_text = ""
-        else:
-            raw_name = result.species.replace("_", " ").title()
-            species_text = _truncate(draw, raw_name, font_species, max_text_w)
-            sci_text = _truncate(draw, result.scientific_name, font_sci, max_text_w)
-
-        draw.text((x_pad, y), species_text, font=font_species, fill=BLACK)
-        y += 28
-
-        if sci_text:
-            draw.text((x_pad, y), sci_text, font=font_sci, fill=DARK_GRAY)
-        y += 20
-
-        # ── Confidence ──────────────────────────────────────────────────────
-        if result.low_confidence:
-            conf_text = "Confidence: --"
-        else:
-            conf_text = f"Confidence: {int(result.confidence * 100)}%"
-        draw.text((x_pad, y), conf_text, font=font_conf, fill=BLACK)
-        y += 24
-
-        # ── Lookalike warning ───────────────────────────────────────────────
-        if result.lookalike and result.lookalike != "N/A" and not result.low_confidence:
-            lookalike_text = f"Lookalike: {result.lookalike}"
-            draw.text((x_pad, y), _truncate(draw, lookalike_text, font_detail, max_text_w), font=font_detail, fill=DARK_GRAY)
-            y += 16
-            if result.key_diff:
-                draw.text((x_pad, y), _truncate(draw, result.key_diff, font_detail, max_text_w), font=font_detail, fill=DARK_GRAY)
-            y += 16
-
-    # ── Safety banner (always at bottom) ────────────────────────────────────
-    banner_h = 36
-    banner_top = HEIGHT - banner_h
-    bg = SAFETY_BG.get(result.safety, DARK_GRAY)
-    fg = SAFETY_FG.get(result.safety, WHITE)
-    banner_label = SAFETY_LABEL.get(result.safety, "UNKNOWN")
-
-    draw.rectangle([(0, banner_top), (WIDTH, HEIGHT)], fill=bg)
-    bbox   = draw.textbbox((0, 0), banner_label, font=font_banner)
-    text_w = bbox[2] - bbox[0]
-    text_h = bbox[3] - bbox[1]
-    bx = (WIDTH - text_w) // 2
-    by = banner_top + (banner_h - text_h) // 2
-    draw.text((bx, by), banner_label, font=font_banner, fill=fg)
+    draw.rectangle([(0, HEIGHT - BANNER_H), (WIDTH, HEIGHT)], fill=DARK_GRAY)
+    _centered_text(draw, "IDENTIFYING...", _load_font(14, bold=True), HEIGHT - BANNER_H + 10, WHITE)
 
     return img
 
 
-# ── Display driver interface ──────────────────────────────────────────────────
+def render_abstention(result: ForagerResult) -> Image.Image:
+    """
+    Fast 1-bit image for abstentions — router didn't commit.
+    Two variants based on why:
+      domain == "other"  → not a foraging target at all
+      domain != "other"  → right kind of subject, bad angle/distance
+    """
+    img  = Image.new("L", (WIDTH, HEIGHT), WHITE)
+    draw = ImageDraw.Draw(img)
+
+    _draw_header(draw)
+
+    font_large = _load_font(22, bold=True)
+    font_small = _load_font(13)
+    font_hint  = _load_font(12)
+
+    if result.domain == "other":
+        _centered_text(draw, "NOT A FORAGING TARGET", font_large, 70, DARK_GRAY)
+        _centered_text(draw, "Point camera at a berry, mushroom,", font_small, 110, DARK_GRAY)
+        _centered_text(draw, "or plant.", font_small, 128, DARK_GRAY)
+    else:
+        _centered_text(draw, "MOVE CLOSER", font_large, 70, DARK_GRAY)
+        _centered_text(draw, f"Router saw: {result.domain.upper()} — but confidence too low", font_hint, 108, DARK_GRAY)
+        _centered_text(draw, "Hold camera 4–6\" from subject", font_small, 126, DARK_GRAY)
+        _centered_text(draw, "and ensure good lighting.", font_small, 144, DARK_GRAY)
+
+    draw.rectangle([(0, HEIGHT - BANNER_H), (WIDTH, HEIGHT)], fill=DARK_GRAY)
+    _centered_text(draw, "TRY AGAIN", _load_font(15, bold=True), HEIGHT - BANNER_H + 10, WHITE)
+
+    return img
+
+
+# ── Full identification render ─────────────────────────────────────────────────
+
+def render(result: ForagerResult) -> Image.Image:
+    """
+    Full 4-gray render for a committed identification result.
+    Used for both confident IDs and low-confidence expert results.
+    """
+    img  = Image.new("L", (WIDTH, HEIGHT), WHITE)
+    draw = ImageDraw.Draw(img)
+
+    font_domain  = _load_font(12, bold=True)
+    font_species = _load_font(22, bold=True)
+    font_sci     = _load_font(13)
+    font_conf    = _load_font(15, bold=True)
+    font_detail  = _load_font(12)
+
+    _draw_header(draw, subtitle=result.domain.upper())
+
+    y = CONTENT_TOP
+
+    # ── Species name ──────────────────────────────────────────────────────────
+    if result.low_confidence:
+        draw.text((X_PAD, y), "LOW CONFIDENCE", font=font_species, fill=DARK_GRAY)
+        y += 30
+        draw.text((X_PAD, y), result.domain.upper(), font=font_domain, fill=DARK_GRAY)
+        y += 20
+        draw.text((X_PAD, y), "Ensure good lighting and a clear", font=font_detail, fill=DARK_GRAY)
+        y += 16
+        draw.text((X_PAD, y), "view of the subject.", font=font_detail, fill=DARK_GRAY)
+    else:
+        raw_name = result.species.replace("_", " ").title()
+        # Strip trailing " Toxic" / " Deadly" from display name — banner handles safety
+        display_name = raw_name.replace(" Toxic", "").replace(" Deadly", "").strip()
+        draw.text((X_PAD, y), _truncate(draw, display_name, font_species, WIDTH - X_PAD * 2), font=font_species, fill=BLACK)
+        y += 28
+
+        draw.text((X_PAD, y), _truncate(draw, result.scientific_name, font_sci, WIDTH - X_PAD * 2), font=font_sci, fill=DARK_GRAY)
+        y += 20
+
+        # ── Confidence ────────────────────────────────────────────────────────
+        draw.text((X_PAD, y), f"Confidence: {int(result.confidence * 100)}%", font=font_conf, fill=BLACK)
+        y += 22
+
+        # ── Lookalike ─────────────────────────────────────────────────────────
+        if result.lookalike and result.lookalike != "N/A":
+            draw.line([(X_PAD, y), (WIDTH - X_PAD, y)], fill=LIGHT_GRAY, width=1)
+            y += 6
+            lk = _truncate(draw, f"Lookalike: {result.lookalike}", font_detail, WIDTH - X_PAD * 2)
+            draw.text((X_PAD, y), lk, font=font_detail, fill=DARK_GRAY)
+            y += 16
+            if result.key_diff:
+                kd = _truncate(draw, result.key_diff, font_detail, WIDTH - X_PAD * 2)
+                draw.text((X_PAD, y), kd, font=font_detail, fill=DARK_GRAY)
+
+    _draw_banner(draw, result.safety)
+    return img
+
+
+# ── Display driver interface ───────────────────────────────────────────────────
 
 class EinkDisplay:
     """
     Thin wrapper around the Waveshare epd3in7 driver.
 
-    Keeps the display initialised between updates so refresh is faster.
-    Call .show(result) to render and push. Call .clear() on exit.
+    show_scanning() — fast 1-bit update shown while inference runs
+    show(result)    — smart dispatch: 1-bit for abstentions, 4-gray for IDs
     """
 
     def __init__(self):
         self._epd = None
+        self._mode = None   # track current mode to avoid redundant re-inits
 
     def __enter__(self):
         from waveshare_epd import epd3in7
         self._epd = epd3in7.EPD()
-        self._epd.init(0)   # 0 = 4-gray mode
+        self._set_mode(4)
         self._epd.Clear(WHITE, 0)
         return self
 
@@ -217,11 +276,31 @@ class EinkDisplay:
         if self._epd:
             self._epd.sleep()
 
+    def show_scanning(self):
+        """Fast 1-bit update — call immediately after trigger, before inference."""
+        img = render_scanning()
+        self._set_mode(1)
+        self._epd.display_1Gray(self._epd.getbuffer(img))
+
     def show(self, result: ForagerResult):
-        """Render result and push to display."""
-        image = render(result)
-        self._epd.display_4Gray(self._epd.getbuffer_4Gray(image))
+        """Render result. Uses 1-bit for abstentions, 4-gray for identifications."""
+        if result.is_unknown:
+            img = render_abstention(result)
+            self._set_mode(1)
+            self._epd.display_1Gray(self._epd.getbuffer(img))
+        else:
+            img = render(result)
+            self._set_mode(4)
+            self._epd.display_4Gray(self._epd.getbuffer_4Gray(img))
 
     def clear(self):
         if self._epd:
+            self._set_mode(4)
             self._epd.Clear(WHITE, 0)
+
+    def _set_mode(self, mode: int):
+        """Switch between 1-bit (mode=1) and 4-gray (mode=0) only when needed."""
+        epd_mode = 0 if mode == 4 else 1
+        if self._mode != mode:
+            self._epd.init(epd_mode)
+            self._mode = mode
