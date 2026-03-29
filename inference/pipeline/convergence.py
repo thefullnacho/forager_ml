@@ -65,6 +65,29 @@ SPECIES_METADATA: dict[str, dict] = {
     "other_mushroom":                 {"safety": "UNKNOWN", "scientific": "Unknown",                  "lookalike": "N/A",                   "key_diff": "Cannot identify — do not consume"},
     "panax_quinquefolius_ginseng_conservation": {
                                        "safety": "SAFE",    "scientific": "Panax quinquefolius",      "lookalike": "N/A",                   "key_diff": "Protected — observe only, do not harvest"},
+
+    # Medicinals expert
+    "boneset":                        {"safety": "CAUTION", "scientific": "Eupatorium perfoliatum",   "lookalike": "White snakeroot",       "key_diff": "White snakeroot has heart-shaped leaves, highly toxic — confirm perfoliate leaf pairs"},
+    "burdock":                        {"safety": "SAFE",    "scientific": "Arctium lappa",            "lookalike": "Rhubarb (leaves)",      "key_diff": "Rhubarb leaves are highly toxic; burdock has burr seedheads"},
+    "catnip":                         {"safety": "SAFE",    "scientific": "Nepeta cataria",           "lookalike": "N/A",                   "key_diff": "Square stem, grey-green downy leaves, minty-musty scent"},
+    "coltsfoot":                      {"safety": "CAUTION", "scientific": "Tussilago farfara",        "lookalike": "Dandelion (flower)",    "key_diff": "Coltsfoot flowers appear before leaves; contains pyrrolizidine alkaloids — avoid internal use"},
+    "echinacea":                      {"safety": "SAFE",    "scientific": "Echinacea purpurea",       "lookalike": "N/A",                   "key_diff": "Spiny orange-brown cone with drooping purple rays"},
+    "foxglove_toxic":                 {"safety": "DEADLY",  "scientific": "Digitalis purpurea",       "lookalike": "Comfrey (rosette)",     "key_diff": "Foxglove has tubular spotted flowers; all parts highly toxic — cardiac glycosides"},
+    "goldenrod":                      {"safety": "SAFE",    "scientific": "Solidago canadensis",      "lookalike": "N/A",                   "key_diff": "Arching plumes of small yellow flowers in late summer"},
+    "motherwort":                     {"safety": "CAUTION", "scientific": "Leonurus cardiaca",        "lookalike": "N/A",                   "key_diff": "Square stem, deeply lobed leaves, pink-purple flowers; avoid in pregnancy"},
+    "mullein":                        {"safety": "SAFE",    "scientific": "Verbascum thapsus",        "lookalike": "N/A",                   "key_diff": "Distinctive tall spike, large velvety basal rosette leaves"},
+    "plantain_broadleaf":             {"safety": "SAFE",    "scientific": "Plantago major",           "lookalike": "N/A",                   "key_diff": "Oval ribbed leaves, parallel veins, narrow seedhead spike"},
+    "poison_hemlock_deadly":          {"safety": "DEADLY",  "scientific": "Conium maculatum",         "lookalike": "Wild carrot",           "key_diff": "Purple-blotched hollow stem, musty smell, no hairy stem — ALL parts deadly"},
+    "red_clover":                     {"safety": "SAFE",    "scientific": "Trifolium pratense",       "lookalike": "N/A",                   "key_diff": "Pink-purple globe flowers, trifoliate leaves with pale V-chevron"},
+    "st_johns_wort":                  {"safety": "CAUTION", "scientific": "Hypericum perforatum",     "lookalike": "N/A",                   "key_diff": "Yellow 5-petalled flowers with black dots; translucent leaf dots; photosensitizing"},
+    "stinging_nettle":                {"safety": "SAFE",    "scientific": "Urtica dioica",            "lookalike": "Wood nettle",           "key_diff": "Cook or dry to neutralize sting; serrated leaves, opposite pairs"},
+    "valerian":                       {"safety": "CAUTION", "scientific": "Valeriana officinalis",    "lookalike": "Water hemlock",         "key_diff": "Water hemlock has purple-streaked hollow stem, chambered root — deadly; valerian has pinnate leaves"},
+    "water_hemlock_deadly":           {"safety": "DEADLY",  "scientific": "Cicuta maculata",          "lookalike": "Wild carrot / Valerian","key_diff": "Chambered root, purple-streaked hollow stem — most violently toxic plant in NA"},
+    "white_snakeroot_toxic":          {"safety": "DEADLY",  "scientific": "Ageratina altissima",      "lookalike": "Boneset",               "key_diff": "Heart-shaped leaves, flat-topped white flowers; causes milk sickness — avoid"},
+    "wild_bergamot":                  {"safety": "SAFE",    "scientific": "Monarda fistulosa",        "lookalike": "N/A",                   "key_diff": "Lavender ragged flowers, square stem, oregano-like scent"},
+    "wild_carrot":                    {"safety": "CAUTION", "scientific": "Daucus carota",            "lookalike": "Poison hemlock / Water hemlock", "key_diff": "Hairy stem, central purple floret, carroty smell — confirm all three before use"},
+    "wood_nettle":                    {"safety": "SAFE",    "scientific": "Laportea canadensis",      "lookalike": "Stinging nettle",       "key_diff": "Alternate leaves (vs opposite in stinging nettle); forested habitat; cook to neutralize"},
+    "yarrow":                         {"safety": "CAUTION", "scientific": "Achillea millefolium",     "lookalike": "Poison hemlock (leaf)", "key_diff": "Flat-topped white flower clusters, ferny aromatic leaves; hemlock has blotched hollow stem"},
 }
 
 UNKNOWN_META = {"safety": "UNKNOWN", "scientific": "Unknown", "lookalike": "N/A", "key_diff": "No confident identification"}

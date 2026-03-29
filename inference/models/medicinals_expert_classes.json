@@ -1,0 +1,26 @@
+{
+  "model": "medicinals_expert",
+  "classes": [
+    "boneset",
+    "burdock",
+    "catnip",
+    "coltsfoot",
+    "echinacea",
+    "foxglove_toxic",
+    "goldenrod",
+    "motherwort",
+    "mullein",
+    "plantain_broadleaf",
+    "poison_hemlock_deadly",
+    "red_clover",
+    "st_johns_wort",
+    "stinging_nettle",
+    "valerian",
+    "water_hemlock_deadly",
+    "white_snakeroot_toxic",
+    "wild_bergamot",
+    "wild_carrot",
+    "wood_nettle",
+    "yarrow"
+  ]
+}

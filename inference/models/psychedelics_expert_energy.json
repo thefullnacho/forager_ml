@@ -1,6 +1,6 @@
 {
   "model": "psychedelics_expert",
-  "threshold_p95": -3.132890224456787,
+  "threshold_p95": -1.5639,
   "threshold_p99": -2.7006876468658447,
   "thresholds": {
     "p90": -3.414914608001709,
@@ -32,5 +32,8 @@
     "psilocybe_cyanescens",
     "psilocybe_ovoideocystidiata",
     "psilocybe_semilanceata"
-  ]
+  ],
+  "threshold_balanced": -1.5639,
+  "threshold_aggressive": -1.3768,
+  "auroc": 0.2351
 }

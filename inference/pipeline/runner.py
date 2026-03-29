@@ -22,7 +22,7 @@ from .loader import ModelHandle
 DOMAIN_EXPERTS: dict[str, list[str]] = {
     "berry":    ["berry_expert"],
     "mushroom": ["highvalue_expert", "psychedelics_expert"],
-    "plant":    ["highvalue_expert"],
+    "plant":    ["highvalue_expert", "medicinals_expert"],
     # "other" intentionally absent — triggers abstention (no experts invoked)
 }
 

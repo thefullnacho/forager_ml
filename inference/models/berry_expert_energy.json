@@ -1,6 +1,6 @@
 {
   "model": "berry_expert",
-  "threshold_p95": -3.0614194869995117,
+  "threshold_p95": -1.5304,
   "threshold_p99": -2.619279146194458,
   "thresholds": {
     "p90": -3.3505637645721436,
@@ -29,5 +29,8 @@
     "staghorn_sumac",
     "virginia_creeper_toxic",
     "wild_grape_riverbank"
-  ]
+  ],
+  "threshold_balanced": -1.5304,
+  "threshold_aggressive": -1.422,
+  "auroc": 0.2477
 }

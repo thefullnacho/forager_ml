@@ -1,0 +1,43 @@
+{
+  "model": "medicinals_expert",
+  "threshold_p95": -3.1283528804779053,
+  "threshold_p99": -2.6543936729431152,
+  "thresholds": {
+    "p90": -3.331108808517456,
+    "p95": -3.1283528804779053,
+    "p99": -2.6543936729431152
+  },
+  "temperature": 1.0,
+  "num_samples": 15200,
+  "val_accuracy": 0.9567105263157895,
+  "energy_stats": {
+    "mean": -3.702045202255249,
+    "std": 0.4045828580856323,
+    "min": -6.60539436340332,
+    "max": -1.4750670194625854,
+    "median": -3.6230063438415527
+  },
+  "classes": [
+    "boneset",
+    "burdock",
+    "catnip",
+    "coltsfoot",
+    "echinacea",
+    "foxglove_toxic",
+    "goldenrod",
+    "motherwort",
+    "mullein",
+    "plantain_broadleaf",
+    "poison_hemlock_deadly",
+    "red_clover",
+    "st_johns_wort",
+    "stinging_nettle",
+    "valerian",
+    "water_hemlock_deadly",
+    "white_snakeroot_toxic",
+    "wild_bergamot",
+    "wild_carrot",
+    "wood_nettle",
+    "yarrow"
+  ]
+}

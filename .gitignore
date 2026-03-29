@@ -60,3 +60,6 @@ psychedelics_dataset_split/
 __pycache__/
 *.py[cod]
 .ipynb_checkpoints/
+
+medicinals_dataset/
+medicinals_dataset_split/

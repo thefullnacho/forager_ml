@@ -18,9 +18,7 @@ CHECK_INTERVAL=60   # seconds
 # ── Job definitions ────────────────────────────────────────────────────────────
 # Format: "PID:name:logfile"
 JOBS=(
-    "1255794:medicinals_download:/tmp/medicinals_pull.log"
-    "1258691:other_download:/tmp/other_pull.log"
-    "1261293:retrain_router:/tmp/retrain_router.log"
+    "1271469:medicinals_expert:/tmp/train_medicinals.log"
 )
 
 # Dataset paths for progress counting

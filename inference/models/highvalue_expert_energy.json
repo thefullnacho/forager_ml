@@ -1,6 +1,6 @@
 {
   "model": "highvalue_expert",
-  "threshold_p95": -3.416698455810547,
+  "threshold_p95": -1.0581,
   "threshold_p99": -2.8287956714630127,
   "thresholds": {
     "p90": -3.5282857418060303,
@@ -29,5 +29,8 @@
     "ramps_wild_leek",
     "reishi_northeast",
     "saffron_crocus"
-  ]
+  ],
+  "threshold_balanced": -1.0581,
+  "threshold_aggressive": -0.8735,
+  "auroc": 0.333
 }
