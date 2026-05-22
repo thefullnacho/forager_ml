@@ -63,3 +63,6 @@ __pycache__/
 
 medicinals_dataset/
 medicinals_dataset_split/
+.venv_curation/
+scripts/output/
+scripts/output_smoke/
