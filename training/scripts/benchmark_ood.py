@@ -75,9 +75,11 @@ def parse_args():
 def compute_energy(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:
     """E(x) = -T * log(sum(exp(logits / T))). Higher = more OOD."""
     scaled = logits / temperature
-    # Subtract max per row for numerical stability
-    shifted = scaled - scaled.max(axis=1, keepdims=True)
-    return -temperature * np.log(np.sum(np.exp(shifted), axis=1))
+    # Subtract max per row for numerical stability, then add it back:
+    # E(x) = -T * logsumexp(L/T);  logsumexp = max + log(sum(exp(L/T - max)))
+    mx = scaled.max(axis=1, keepdims=True)
+    shifted = scaled - mx
+    return -temperature * (mx.squeeze(axis=1) + np.log(np.sum(np.exp(shifted), axis=1)))
 
 
 # ── Inference ─────────────────────────────────────────────────────────────────
