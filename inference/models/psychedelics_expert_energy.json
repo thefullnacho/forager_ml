@@ -1,21 +1,21 @@
 {
   "model": "psychedelics_expert",
-  "threshold_p95": -1.5639,
-  "threshold_p99": -2.7006876468658447,
+  "threshold_p95": -2.966815781593323,
+  "threshold_p99": -2.7515209722518934,
   "thresholds": {
-    "p90": -3.414914608001709,
-    "p95": -3.132890224456787,
-    "p99": -2.7006876468658447
+    "p90": -3.0749786376953123,
+    "p95": -2.966815781593323,
+    "p99": -2.7515209722518934
   },
   "temperature": 1.0,
-  "num_samples": 6915,
-  "val_accuracy": 0.9127982646420825,
+  "num_samples": 6927,
+  "val_accuracy": 0.9128049660747799,
   "energy_stats": {
-    "mean": -4.013773441314697,
-    "std": 0.44389808177948,
-    "min": -6.755592346191406,
-    "max": -1.880510687828064,
-    "median": -4.065001010894775
+    "mean": -3.5587189197540283,
+    "std": 0.44887444376945496,
+    "min": -6.634616851806641,
+    "max": -2.519162654876709,
+    "median": -3.4968457221984863
   },
   "classes": [
     "amanita_muscaria_toxic",
@@ -32,8 +32,5 @@
     "psilocybe_cyanescens",
     "psilocybe_ovoideocystidiata",
     "psilocybe_semilanceata"
-  ],
-  "threshold_balanced": -1.5639,
-  "threshold_aggressive": -1.3768,
-  "auroc": 0.2351
+  ]
 }

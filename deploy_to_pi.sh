@@ -53,6 +53,7 @@ echo ""
 echo "  Syncing pipeline code ..."
 rsync -avz --progress $DRY \
     --include="main.py" \
+    --include="demo.py" \
     --include="requirements_pi.txt" \
     --exclude="__pycache__/" \
     --exclude="*.pyc" \
@@ -95,6 +96,15 @@ else
     echo "  Illustrations: none yet (run data/acquisition/fetch_illustrations.py)"
 fi
 
+# ── Sync systemd service file ────────────────────────────────────────────────
+SERVICE_FILE="$INFERENCE_DIR/walkingman.service"
+if [[ -f "$SERVICE_FILE" ]]; then
+    echo ""
+    echo "  Syncing systemd service ..."
+    rsync -avz --progress $DRY \
+        "$SERVICE_FILE" "$PI_HOST:$REMOTE_DIR/"
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────────────
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -103,11 +113,20 @@ if [[ -n "$DRY" ]]; then
 else
     echo "  Deploy complete."
     echo ""
-    echo "  Verify on Pi:"
-    echo "    ssh $PI_HOST"
-    echo "    ls $REMOTE_DIR/models/*.hef"
+    echo "  Run manually (SSH test):"
+    echo "    ssh $PI_HOST 'cd $REMOTE_DIR && python main.py --no-voice --no-tts'"
     echo ""
-    echo "  Run (no display/voice for SSH test):"
-    echo "    ssh $PI_HOST 'cd $REMOTE_DIR && python main.py --no-display --no-voice --no-tts'"
+    echo "  Install auto-start service (one-time):"
+    echo "    ssh $PI_HOST"
+    echo "    sudo cp $REMOTE_DIR/walkingman.service /etc/systemd/system/"
+    echo "    sudo systemctl daemon-reload"
+    echo "    sudo systemctl enable walkingman"
+    echo "    sudo systemctl start walkingman"
+    echo ""
+    echo "  Service commands:"
+    echo "    sudo systemctl status walkingman    # check status"
+    echo "    sudo journalctl -u walkingman -f    # live logs"
+    echo "    sudo systemctl restart walkingman   # restart"
+    echo "    sudo systemctl stop walkingman      # stop"
 fi
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

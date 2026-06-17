@@ -1,6 +1,8 @@
 # Forager ML
 
-Real-time plant and fungi identification pipeline for edge deployment on a **Hailo 8L NPU** (Raspberry Pi 5). Three specialist YOLO classifiers run in parallel, results converge through a voting layer, and the output is pushed to an eInk display with optional voice trigger and TTS.
+Real-time plant and fungi identification for edge deployment on a **Hailo 8L NPU** (Raspberry Pi 5). A domain router plus four expert classifiers — all `tf_efficientnet_lite2` (~4.9M params each) — run a two-stage pipeline: the router picks the domain, the relevant expert(s) classify, and results are resolved **deadly-vetoes-safe** before being pushed to an eInk display with optional voice trigger and TTS. All models output raw logits so softmax, energy-based OOD rejection, and confidence gating run on the Pi 5 CPU.
+
+> **Architecture note:** earlier iterations used YOLOv8n-cls classifiers and a max-confidence voting layer. Both are gone. The shipped stack is EfficientNet-Lite2 with a router and deadly-vetoes-safe resolution (see [Convergence Logic](#convergence-logic)). Some `runs/classify/` artifacts and `convert_yolo_to_hef.py` remain from the YOLO era and are legacy.
 
 ---
 
@@ -16,9 +18,9 @@ Real-time plant and fungi identification pipeline for edge deployment on a **Hai
 | PSU | 1000W Gold (handles both GPUs comfortably ~800W combined load) |
 | PyTorch stack | PyTorch 2.9.1+cu128 · CUDA 12.8 · cuDNN 91002 |
 
-> **Blackwell (RTX 5080) + PyTorch:** Works perfectly for YOLO training via `forager_stable` env.
+> **Blackwell (RTX 5080) + PyTorch:** Works perfectly for EfficientNet training via `forager_stable` env.
 >
-> **Blackwell + TF 2.18 (Hailo DFC):** Does NOT work — TF 2.18 only supports up to `sm_90`. The DFC falls back to optimization level 0 with a CPU-only TF session, capping calibration at 64 images regardless of how many you provide. The **RTX 4060 Ti** (`sm_89`) is used specifically for DFC compilation to get optimization level 2.
+> **Blackwell + TF 2.18 (Hailo DFC):** Does NOT work — TF 2.18 only supports up to `sm_90`. DFC compilation must run on the **RTX 4060 Ti** (`sm_89`) via `CUDA_VISIBLE_DEVICES=1` to get optimization level 2. See [Known Issues](#known-issues--gotchas) for the CUDA-library path gotcha.
 
 ### Edge Device
 
@@ -37,26 +39,36 @@ Real-time plant and fungi identification pipeline for edge deployment on a **Hai
 
 ## Model Architecture
 
-Three expert classifiers, all identical architecture:
+A domain router and four expert classifiers, all identical architecture (`tf_efficientnet_lite2`, 224×224 input, raw-logit output):
 
-| Model | Dataset | Classes | Top-1 Acc | Top-5 Acc |
-|-------|---------|---------|-----------|-----------|
-| `berry_expert` | `berry_dataset` (38,672 images) | 11 | 94.2% | 99.6% |
-| `highvalue_expert` | `high_value_dataset` (36,688 images) | 12 | 96.6% | 99.8% |
-| `psychedelics_expert` | `psychedelics_dataset` (~33,000 images) | 12 | 80.91% | 99.59% |
+| Model | Domain(s) | Classes | Val Top-1 | Toxic-as-edible FAR |
+|-------|-----------|---------|-----------|---------------------|
+| `domain_router` | berry / mushroom / plant / other | 4 | — | — |
+| `berry_expert` | berry | 11 | 92.1% | 0.0 |
+| `highvalue_expert` | mushroom, plant | 11 | 97.4% | 0.0 |
+| `medicinals_expert` | plant | 21 | 95.7% | 0.0 |
+| `psychedelics_expert` | mushroom | 14 | 91.3% | 0.0 |
 
-**Architecture:** YOLOv8n-cls · 224×224 input · 50 epochs · batch 64 · RandAugment · AMP
+Accuracies are `overall_accuracy` from `runs/efficientnet/<name>/benchmark.json`. **Toxic-as-edible FAR** is the false-accept rate of a toxic/deadly class being predicted as an edible — 0.0 across all experts on the validation sets.
 
-> **highvalue_expert has 12 classes, not 11.** It includes both `reishi_mushroom` (Ganoderma lucidum) and `reishi_northeast` (Ganoderma tsugae) as separate classes. This caused a class manifest mismatch on first deployment — `reishi_mushroom` was missing from the JSON. The class manifest and SPECIES_METADATA in `convergence.py` must both list 12 classes.
+**Architecture:** `tf_efficientnet_lite2` (timm) · ~4.9M params each · 224×224 · 50 epochs · RandAugment · AMP · raw logits (no softmax/sigmoid head) for energy-based OOD.
 
-### Berry Expert Classes
+> **Class manifests are authoritative.** `inference/models/<name>_classes.json` (and the matching checkpoint) define the deployed class set; `SPECIES_METADATA` in `convergence.py` must be a superset. `highvalue_expert` ships **11 classes** with `reishi_northeast` (*Ganoderma tsugae*); `convergence.py` also carries an unused `reishi_mushroom` (*Ganoderma lucidum*) entry for forward-compat. After any recompile, regenerate the manifest from the checkpoint so class order/index stays aligned.
+
+### Router Classes (4)
+`berry` · `mushroom` · `plant` · `other`
+
+### Berry Expert Classes (11)
 `bittersweet_nightshade_toxic` · `blackberry_common` · `blueberry_highbush` · `blueberry_wild` · `canada_moonseed_deadly` · `elderberry_american` · `poison_ivy` · `pokeweed_toxic` · `staghorn_sumac` · `virginia_creeper_toxic` · `wild_grape_riverbank`
 
-### High-Value Expert Classes (12)
-`chaga_medicinal` · `chanterelles_edible` · `chicken_of_the_woods` · `ginseng_american` · `high_value_toxics` · `lions_mane` · `morels_edible` · `ostrich_fern_fiddlehead` · `ramps_wild_leek` · `reishi_mushroom` · `reishi_northeast` · `saffron_crocus`
+### High-Value Expert Classes (11)
+`chaga_medicinal` · `chanterelles_edible` · `chicken_of_the_woods` · `ginseng_american` · `high_value_toxics` · `lions_mane` · `morels_edible` · `ostrich_fern_fiddlehead` · `ramps_wild_leek` · `reishi_northeast` · `saffron_crocus`
 
-### Psychedelics Expert Classes
-`amanita_muscaria_toxic` · `amanita_phalloides_deadly` · `conocybe_filaris_deadly` · `galerina_marginata_toxic` · `gymnopilus_junonius` · `other_mushroom` · `panax_quinquefolius_ginseng_conservation` · `psilocybe_azurescens` · `psilocybe_caerulipes` · `psilocybe_cubensis` · `psilocybe_cyanescens` · `psilocybe_semilanceata`
+### Medicinals Expert Classes (21)
+`boneset` · `burdock` · `catnip` · `coltsfoot` · `echinacea` · `foxglove_toxic` · `goldenrod` · `motherwort` · `mullein` · `plantain_broadleaf` · `poison_hemlock_deadly` · `red_clover` · `st_johns_wort` · `stinging_nettle` · `valerian` · `water_hemlock_deadly` · `white_snakeroot_toxic` · `wild_bergamot` · `wild_carrot` · `wood_nettle` · `yarrow`
+
+### Psychedelics Expert Classes (14)
+`amanita_muscaria_toxic` · `amanita_phalloides_deadly` · `conocybe_filaris_deadly` · `galerina_marginata_toxic` · `gymnopilus_junonius` · `other_mushroom` · `panaeolus_cinctulus` · `panax_quinquefolius_ginseng_conservation` · `psilocybe_azurescens` · `psilocybe_caerulipes` · `psilocybe_cubensis` · `psilocybe_cyanescens` · `psilocybe_ovoideocystidiata` · `psilocybe_semilanceata`
 
 ---
 
@@ -65,45 +77,45 @@ Three expert classifiers, all identical architecture:
 ```
 forager_ml/
 ├── data/
-│   ├── acquisition/          # iNaturalist scrapers (per category)
-│   └── calibration/          # Calibration set builders for Hailo quantisation
+│   └── acquisition/          # iNaturalist scrapers (per category)
 │
 ├── training/
-│   ├── configs/              # YAML/JSON training and hardware configs
 │   └── scripts/
-│       ├── train_psychedelics_expert.py   # GPU training script (Blackwell-ready)
-│       └── train_forager_lite*.py         # Legacy EfficientNetB0 trainers (v4-v7)
+│       ├── train_efficientnet_specialist.py  # Train an expert (timm, Blackwell-ready)
+│       ├── train_domain_router.py            # Train the 4-class domain router
+│       ├── export_efficientnet_onnx.py       # best.pt -> ONNX (raw logits)
+│       ├── compile_efficientnet_hef.py       # ONNX -> HEF via Hailo DFC
+│       ├── calibrate_energy_threshold.py     # Energy-based OOD thresholds
+│       ├── benchmark_expert.py               # Per-expert accuracy + toxic-as-edible FAR
+│       ├── benchmark_router.py               # Router accuracy (EfficientNet or legacy YOLO)
+│       ├── benchmark_ood.py                  # OOD detector AUROC
+│       ├── build_router_dataset.py           # Assemble the router dataset
+│       └── rebuild_dataset_splits.py         # (Re)create train/val splits
 │
 ├── inference/
-│   ├── convert_yolo_to_hef.py  # .pt -> .onnx -> .hef full conversion pipeline
 │   ├── main.py                 # Raspberry Pi entry point
-│   ├── models/                 # Compiled .hef files + _classes.json manifests
+│   ├── convert_yolo_to_hef.py  # LEGACY (YOLO era) — superseded by compile_efficientnet_hef.py
+│   ├── models/                 # Deployed .hef + _classes.json + _energy.json
 │   ├── onnx_staging/           # Intermediate .onnx files (temp, safe to delete)
 │   └── pipeline/
 │       ├── loader.py           # HailoModelLoader — loads all HEFs into one VDevice
-│       ├── runner.py           # AsyncRunner — parallel inference via ThreadPoolExecutor
-│       ├── convergence.py      # Voting layer, species metadata, ForagerResult
+│       ├── runner.py           # AsyncRunner — router→expert(s); energy OOD gate
+│       ├── convergence.py      # Deadly-vetoes-safe resolution + species metadata
 │       ├── camera.py           # picamera2 capture → 224×224 numpy array
 │       ├── display.py          # Waveshare 3.7" eInk renderer
 │       └── voice.py            # Whisper trigger + pyttsx3 TTS
 │
-├── optimization/
-│   ├── hailo/                # Hailo DFC compilation scripts (legacy EfficientNet)
-│   ├── quantization/         # TFLite / ONNX / SavedModel export
-│   └── sony_imx500/          # Sony IMX500 pipeline (deprecated)
+├── runs/efficientnet/         # Trained checkpoints (best.pt), benchmarks, calibration
+│   ├── domain_router_v2/
+│   ├── berry_expert/
+│   ├── highvalue_expert/
+│   ├── medicinals_expert/
+│   └── psychedelics_expert/
+├── runs/classify/             # LEGACY YOLO runs (archivable)
 │
-├── utils/
-│   ├── model_ops/            # Model surgery: strip layers, fix names, flatten
-│   └── visualization/        # Confusion matrix generation
-│
-├── runs/classify/
-│   ├── berry_expert/         # Trained YOLO weights + training plots
-│   ├── highvalue_expert/     # Trained YOLO weights + training plots
-│   └── psychedelics_expert/  # Trained YOLO weights + training plots
-│
-├── berry_dataset/            # 38,672 images · 11 classes
-├── high_value_dataset/       # 36,688 images · 12 classes
-└── psychedelics_dataset/     # ~33,000 images · 12 classes
+├── berry_dataset/  high_value_dataset/  medicinals_dataset/  psychedelics_dataset/
+├── *_dataset_split/           # ImageFolder train/ + val/ splits used for training
+└── router_dataset/            # 4-class router dataset (train/ + val/)
 ```
 
 ---
@@ -114,69 +126,82 @@ Two environments are required — they cannot be merged due to dependency confli
 
 | Environment | Path | Purpose |
 |-------------|------|---------|
-| `forager_stable` | `/home/alex/miniconda3/envs/forager_stable/` | Training — ultralytics, PyTorch, OpenCV |
+| `forager_stable` | `/home/alex/miniconda3/envs/forager_stable/` | Training, ONNX export, energy calibration — timm, PyTorch, OpenCV |
 | `hailo_build` | `~/Downloads/hailo_build/` | Hailo DFC compilation (`hailo_sdk_client`, TF 2.18) |
-
-> The conversion script (`convert_yolo_to_hef.py`) is always run under `hailo_build`. It automatically calls `forager_stable`'s Python via subprocess for the ONNX export step — no manual environment switching needed.
 
 ---
 
 ## Pipeline: Dev Machine
 
-### 1. Train the Expert Models
+### 1. Train
 
 ```bash
-# berry_expert and highvalue_expert are already trained.
-# Train psychedelics expert (~20-30 min on RTX 5080):
-/home/alex/miniconda3/envs/forager_stable/bin/python \
-    training/scripts/train_psychedelics_expert.py
+PY=/home/alex/miniconda3/envs/forager_stable/bin/python
 
-# Weights land at:
-#   runs/classify/psychedelics_expert/weights/best.pt
+# An expert (~20-30 min on RTX 5080):
+$PY training/scripts/train_efficientnet_specialist.py \
+    --dataset psychedelics_dataset_split --name psychedelics_expert --epochs 50
+
+# The domain router:
+$PY training/scripts/train_domain_router.py --name domain_router
+
+# Weights land at: runs/efficientnet/<name>/best.pt
 ```
 
-> **RTX 5080 smoke test:** PyTorch 2.9.1+cu128 supports Blackwell natively. If a smoke test fails, check the matrix multiply shape — `x = torch.randn(64, 512); x @ x.T` not `x @ x.view(64,-1).T`.
-
-### 2. Convert .pt → .hef
-
-**Requires the RTX 4060 Ti to be installed** so TF 2.18 inside `hailo_build` gets a compatible GPU (sm_89 ≤ sm_90 limit). Without a compatible GPU, DFC falls back to optimization level 0.
+### 2. Export ONNX (raw logits)
 
 ```bash
-# With both GPUs installed, hide the RTX 5080 (Blackwell) from TF,
-# expose only the 4060 Ti. Check GPU indices first:
-nvidia-smi -L
-
-# Then run with only the 4060 Ti visible (adjust index as needed):
-CUDA_VISIBLE_DEVICES=1 /home/alex/Downloads/hailo_build/bin/python \
-    inference/convert_yolo_to_hef.py
+$PY training/scripts/export_efficientnet_onnx.py \
+    --checkpoint runs/efficientnet/psychedelics_expert/best.pt --no-activation
+# -> inference/onnx_staging/<name>_logits.onnx
 ```
 
-To force a full recompile (e.g. after fixing class manifests or changing calibration):
+`--no-activation` strips the head activation so the ONNX (and HEF) output raw logits — required for energy-based OOD.
+
+### 3. Compile .onnx → .hef (Hailo DFC)
+
+**Must run on the RTX 4060 Ti** (`sm_89`) so TF 2.18 gets a supported GPU and DFC reaches **optimization level 2**. The bundled CUDA-12 libs must be on `LD_LIBRARY_PATH` (the system `/usr/local/cuda` is CUDA 13, which TF 2.18 can't use):
+
 ```bash
-rm inference/models/*.hef inference/models/*.har
-CUDA_VISIBLE_DEVICES=1 /home/alex/Downloads/hailo_build/bin/python \
-    inference/convert_yolo_to_hef.py
+SP=/home/alex/Downloads/hailo_build/lib/python3.10/site-packages
+NVLIBS=$(ls -d $SP/nvidia/*/lib | tr '\n' ':')
+
+LD_LIBRARY_PATH="$NVLIBS$LD_LIBRARY_PATH" CUDA_VISIBLE_DEVICES=1 \
+    /home/alex/Downloads/hailo_build/bin/python \
+    training/scripts/compile_efficientnet_hef.py \
+        --onnx inference/onnx_staging/psychedelics_expert_logits.onnx \
+        --name psychedelics_expert \
+        --dataset psychedelics_dataset_split
 ```
 
-Output in `inference/models/`:
-```
-berry_expert.hef              berry_expert_classes.json
-highvalue_expert.hef          highvalue_expert_classes.json
-psychedelics_expert.hef       psychedelics_expert_classes.json
-```
+Watch for `Using default optimization level of 2` in the DFC output. If you see `Reducing optimization level to 0 ... no available GPU`, TF can't see the 4060 Ti — check `LD_LIBRARY_PATH` and `CUDA_VISIBLE_DEVICES` (see [Known Issues](#known-issues--gotchas)).
 
-Watch for `Optimization level: 2` in DFC output — if you see `Reducing optimization level to 0`, the wrong GPU is visible.
+> **Recompiling an existing model:** delete the old `inference/models/<name>.hef`, `.har`, `_optimized.har`, **and `_classes.json`** first. The compile script reuses an existing `_classes.json` if present, so a stale manifest will survive a recompile and silently keep the old class set.
+
+Output in `inference/models/`: `<name>.hef`, `<name>_classes.json`.
 
 **Calibration details:**
-- 1200 images sampled evenly across classes per model
-- PIL-based loading (not OpenCV — hailo_build doesn't have cv2)
-- Format: NHWC float32 [0, 255] — matches YOLO ONNX's expected input range
+- ~1200 images sampled evenly across classes (DFC needs 1024+ for optimization level > 0)
+- PIL-based loading (hailo_build has no cv2)
+- Format: NHWC float32 [0, 255]; the HEF applies ImageNet normalization internally via a DFC model script (`normalization([123.675, 116.28, 103.53], [58.395, 57.12, 57.375])`)
 - `ImageFile.LOAD_TRUNCATED_IMAGES = True` to skip corrupt dataset images
 
-### 3. Copy to Raspberry Pi
+### 4. Calibrate energy thresholds
 
 ```bash
-scp inference/models/*.hef inference/models/*_classes.json \
+$PY training/scripts/calibrate_energy_threshold.py \
+    --checkpoint runs/efficientnet/psychedelics_expert/best.pt \
+    --dataset psychedelics_dataset_split
+# -> writes runs/efficientnet/<name>/energy_calibration.json
+#    and copies inference/models/<name>_energy.json (threshold_p95 + temperature)
+```
+
+Re-run this whenever a model's classes change — the threshold is class-set specific. The inference temperature is read from this JSON and must match the calibration temperature.
+
+### 5. Copy to Raspberry Pi
+
+```bash
+scp inference/models/*.hef inference/models/*_classes.json inference/models/*_energy.json \
     pi@192.168.4.73:~/forager/models/
 ```
 
@@ -187,10 +212,9 @@ scp inference/models/*.hef inference/models/*_classes.json \
 ### Running Inference
 
 ```bash
-# SSH in
 ssh pi@192.168.4.73
 
-# Full pipeline (requires display, mic, speaker wired up):
+# Full pipeline (display, mic, speaker wired up):
 python inference/main.py
 
 # Development / SSH testing flags:
@@ -201,44 +225,41 @@ python inference/main.py --no-voice --no-display --no-tts
 
 | File | Role |
 |------|------|
-| `pipeline/loader.py` | `HailoModelLoader` — loads all .hef files into one VDevice with `ROUND_ROBIN` scheduler |
-| `pipeline/runner.py` | `AsyncRunner` — parallel inference via `ThreadPoolExecutor(max_workers=3)` (HRT_4 pattern) |
-| `pipeline/convergence.py` | Voting layer, species metadata, `ForagerResult` |
+| `pipeline/loader.py` | `HailoModelLoader` — loads all .hef into one VDevice (`ROUND_ROBIN`); reads `_energy.json` threshold + temperature |
+| `pipeline/runner.py` | `AsyncRunner` — router → expert(s); energy OOD gate; returns ALL surviving predictions |
+| `pipeline/convergence.py` | Deadly-vetoes-safe resolution, species metadata, `ForagerResult` |
 | `pipeline/camera.py` | picamera2 → 672×672 RGB capture → resized to 224×224 |
 | `pipeline/display.py` | Waveshare 3.7" epd3in7 4-gray renderer |
 | `pipeline/voice.py` | Whisper tiny.en trigger words + pyttsx3/espeak TTS |
 
 ### HailoRT API Notes
 
-The inference pipeline uses HailoRT Python API. Key details that differ from older docs:
-
 - `InputVStreamParams.make(network_group, quantized=False, format_type=FormatType.FLOAT32)` — called at inference time inside `_infer_single()`, not pre-created in loader
 - `OutputVStreamParams.make(...)` — same pattern
 - Input tensor: `np.expand_dims(image.astype(np.float32), axis=0)` — shape `(1, 224, 224, 3)` NHWC, values [0, 255]
-- The YOLO ONNX model includes `/255` normalization internally; the HEF inherits this — do **not** normalize before sending
+- The HEF applies ImageNet normalization internally (baked in at compile via the DFC model script) — feed raw [0, 255] pixels; do **not** normalize before sending
 
 ### Convergence Logic
 
 ```
-For each model's top prediction:
-  1. Domain gate  — species must be in that model's trained class list
-  2. Confidence gate — discard if confidence < 0.75
-  3. Vote aggregation — surviving votes collected per candidate species
-  4. Agreement boost — multiply by 1.20 if 2+ models agree (cap at 0.99)
-  5. Abstention — return UNKNOWN if no species survives all gates
+Stage 1 — Router
+  • energy OOD gate (reject if energy > threshold_p95) → "other"/abstain
+  • confidence gate (reject if top < 0.74) → abstain
+  • else pick domain: berry | mushroom | plant
+
+Stage 2 — Expert(s) for that domain (runner.py DOMAIN_EXPERTS)
+  • berry    → berry_expert
+  • mushroom → highvalue_expert + psychedelics_expert
+  • plant    → highvalue_expert + medicinals_expert
+  • each expert: energy OOD gate before softmax; OOD-rejected experts drop out
+
+Resolution (convergence.resolve) — DEADLY-VETOES-SAFE
+  • a DEADLY verdict beats a non-deadly one even if less confident
+  • within a safety tier, highest confidence wins
+  • no surviving prediction → UNKNOWN
 ```
 
-### Quantization / Confidence Notes
-
-Int8 quantization at optimization level 0 (no GPU) flattens the softmax output, making all class probabilities nearly uniform (~8-9% for 12 classes). At optimization level 2 (with 4060 Ti), proper confidence separation is expected.
-
-As a workaround for level-0 HEFs, `runner.py` applies probability sharpening:
-```python
-def _sharpen(probs, alpha=4.0):
-    sharpened = np.power(probs, alpha)
-    return sharpened / sharpened.sum()
-```
-This can be removed or tuned once level-2 HEFs are compiled.
+**Why deadly-vetoes-safe and not max-confidence:** with max-confidence voting, a confident "ramps" (SAFE, 0.90) out-votes a cautious "deadly lookalike" (DEADLY, 0.55) — the lily-of-the-valley failure mode. In this domain a false reassurance is the only error that truly matters, so any deadly verdict wins.
 
 ### eInk Output Format
 
@@ -263,8 +284,9 @@ SAFE / CAUTION / DEADLY / UNKNOWN
 
 | Issue | Root Cause | Fix |
 |-------|-----------|-----|
-| DFC optimization level forced to 0 | TF 2.18 does not support Blackwell (`sm_120`) | Install RTX 4060 Ti; use `CUDA_VISIBLE_DEVICES` to hide 5080 |
-| highvalue_expert class count mismatch (12 vs 11) | `reishi_mushroom` missing from manifest | Added to `_classes.json` and `SPECIES_METADATA` |
+| DFC optimization forced to level 0 ("no available GPU") | TF 2.18 can't load CUDA libs: system CUDA is 13, TF 2.18 needs CUDA 12; and Blackwell (`sm_120`) is unsupported | Run on the 4060 Ti with `CUDA_VISIBLE_DEVICES=1` **and** prepend `hailo_build`'s bundled `site-packages/nvidia/*/lib` to `LD_LIBRARY_PATH` |
+| Recompile keeps old class set | `compile_efficientnet_hef.py` reuses an existing `_classes.json` | Delete `inference/models/<name>_classes.json` (and `.hef`/`.har`) before recompiling |
+| Expert returns UNKNOWN for a valid class | Class in manifest but missing from `SPECIES_METADATA` | `SPECIES_METADATA` must be a superset of every deployed manifest |
 | Pi camera not detected | Camera Module 3 in wrong port (CAM1) | Move FPC cable to **CAM0** |
 | `create_input_vstreams_params` AttributeError | HailoRT API version difference | Use `InputVStreamParams.make()` / `OutputVStreamParams.make()` at inference time |
 | Calibration fails with `'images'` key error | Old API expected dict input | Pass bare numpy array (NHWC) to `runner.optimize()` |
@@ -275,23 +297,25 @@ SAFE / CAUTION / DEADLY / UNKNOWN
 
 ---
 
-## Legacy Hardware (Archived)
+## Legacy Hardware & Code (Archived)
 
-The project originally targeted a **Google Coral TPU** (required driver rebuilds — abandoned) and then a **Sony IMX500** (full quantisation pipeline built but not deployed). Both are superseded by the Hailo 8L.
-
-Root-level `.tflite`, `.keras`, `.h5`, and Sony `.har` files are artifacts from these iterations and can be archived or deleted.
+The project originally targeted a **Google Coral TPU** (driver rebuilds — abandoned) then a **Sony IMX500** (quantisation pipeline built but not deployed), and used **YOLOv8n-cls** classifiers before EfficientNet-Lite2. Superseded artifacts: `runs/classify/`, `inference/convert_yolo_to_hef.py`, the YOLO fallback in `benchmark_router.py`, and any root-level `.tflite`/`.keras`/`.h5`/Sony `.har` files — all archivable/deletable.
 
 ---
 
 ## Datasets
 
-All images sourced from **iNaturalist** via scrapers in `data/acquisition/` with `quality_grade` filtering.
+All images sourced from **iNaturalist** via scrapers in `data/acquisition/` with `quality_grade=research` filtering. Counts below are the train+val splits actually used for training.
 
-| Dataset | Images | Classes | Scraper |
-|---------|--------|---------|---------|
-| `berry_dataset` | 38,672 | 11 | `berry_pull_inat.py` |
-| `high_value_dataset` | 36,688 | 12 | `high_value_pull_inat.py` |
-| `psychedelics_dataset` | ~33,000 | 12 | `psychedelic_pull_inat.py` |
+| Dataset | Images (split) | Classes |
+|---------|----------------|---------|
+| `berry_dataset_split` | 39,009 | 11 |
+| `high_value_dataset_split` | 33,524 | 11 |
+| `psychedelics_dataset_split` | 34,631 | 14 |
+| `medicinals_dataset_split` | 76,000 | 21 |
+| `router_dataset` | 57,417 | 4 |
+
+Training images are not redistributed. Acquisition scripts use verified taxon IDs.
 
 ---
 

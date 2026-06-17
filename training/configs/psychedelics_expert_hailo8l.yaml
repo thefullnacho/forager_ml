@@ -1,0 +1,73 @@
+# psychedelics_expert — Hailo DFC compilation reference
+#
+# EfficientNet Lite2 specialist classifier for psychedelic mushroom
+# identification and deadly lookalike detection, compiled for Hailo 8L.
+#
+# This file documents every parameter used by compile_efficientnet_hef.py.
+# The actual compilation uses the Hailo SDK ClientRunner Python API directly
+# (not a YAML driver) — this YAML is a reproducibility reference and serves
+# as the DFC config documentation for the homesteaderlabs/models release.
+#
+# Requirements:
+#   Hailo Dataflow Compiler (DFC) 3.33.0
+#   /home/alex/Downloads/hailo_build/bin/python
+#
+# Compile command:
+#   cd /tmp
+#   /home/alex/Downloads/hailo_build/bin/python \
+#       /path/to/forager_ml/training/scripts/compile_efficientnet_hef.py \
+#       --onnx inference/onnx_staging/psychedelics_expert_logits.onnx \
+#       --name psychedelics_expert \
+#       --dataset psychedelics_dataset
+#
+# Note: run from /tmp to avoid hailo_sdk.core.log becoming root-owned.
+
+model:
+  name: psychedelics_expert
+  arch: tf_efficientnet_lite2          # timm model key — SE-free variant required
+  hw_arch: hailo8l                      # Hailo 8L M.2 AI HAT (4 TOPS)
+  num_classes: 14
+  input_shape: [1, 3, 224, 224]         # NCHW — PyTorch convention
+  input_name: input
+  output_name: output
+  output_type: raw_logits               # no softmax — required for energy-based OOD
+
+onnx:
+  opset: 13                             # max opset supported by DFC 3.33
+  exporter: torchscript                 # dynamo=False required
+  # PyTorch 2.9+ defaults to the dynamo exporter (opset 18 with different Conv
+  # attribute encoding that DFC's ONNX parser rejects). Always export with:
+  #   torch.onnx.export(..., dynamo=False)
+  source: inference/onnx_staging/psychedelics_expert_logits.onnx
+
+normalization:
+  # Model script injected by ClientRunner before quantization.
+  # ImageNet mean/std scaled to [0, 255] pixel domain (DFC expects [0,255] inputs).
+  # DFC applies normalization internally — the Pi feeds raw uint8 images.
+  mean: [123.675, 116.28, 103.53]       # [0.485, 0.456, 0.406] * 255
+  std:  [58.395,  57.12,  57.375]       # [0.229, 0.224, 0.225] * 255
+  model_script: "norm_layer = normalization([123.675, 116.28, 103.53], [58.395, 57.12, 57.375])"
+
+quantization:
+  type: int8
+  calibration:
+    samples: 1200                       # DFC requires >= 1024 for optimization level > 0
+    format: nhwc_float32                # (N, 224, 224, 3) in [0, 255]
+    source: psychedelics_dataset/train  # sampled evenly across all 14 class dirs
+    per_class_budget: 85                # floor(1200 / 14) images per class
+
+  optimization:
+    level: auto                         # DFC default — balanced speed/accuracy tradeoff
+    batch_size: 8
+
+postprocessing:
+  # All post-processing runs on Pi 5 CPU, not in the HEF
+  energy_ood:
+    formula: "-T * log(sum(exp(logits / T)))"
+    temperature: 1.0
+    rejection_percentile: 95            # calibrated on val set — see energy_calibration.json
+  output_format: float32                # set via HailoRT output.set_format_type(FormatType.FLOAT32)
+
+outputs:
+  hef: inference/models/psychedelics_expert.hef
+  manifest: inference/models/psychedelics_expert_classes.json

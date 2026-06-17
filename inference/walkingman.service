@@ -1,0 +1,25 @@
+[Unit]
+Description=Walking Man — handheld plant & fungi identifier
+After=multi-user.target sound.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/forager
+ExecStart=/home/pi/forager/venv/bin/python main.py --no-tts
+Restart=on-failure
+RestartSec=5
+
+# Give hardware time to initialize on cold boot
+ExecStartPre=/bin/sleep 3
+
+# Environment — ensure audio and display devices are accessible
+Environment=PYTHONUNBUFFERED=1
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=walkingman
+
+[Install]
+WantedBy=multi-user.target

@@ -9,7 +9,7 @@
       "precision": 0.9121,
       "recall": 0.9517,
       "f1": 0.9315,
-      "avg_confidence": 0.8501,
+      "avg_confidence": 0.85,
       "safety_critical": true
     },
     "blackberry_common": {
@@ -17,22 +17,22 @@
       "precision": 0.9599,
       "recall": 0.9287,
       "f1": 0.9441,
-      "avg_confidence": 0.5663,
+      "avg_confidence": 0.5662,
       "safety_critical": false
     },
     "blueberry_highbush": {
       "n": 800,
-      "precision": 0.8887,
+      "precision": 0.8876,
       "recall": 0.8387,
-      "f1": 0.863,
-      "avg_confidence": 0.4934,
+      "f1": 0.8625,
+      "avg_confidence": 0.4935,
       "safety_critical": false
     },
     "blueberry_wild": {
       "n": 800,
-      "precision": 0.8901,
+      "precision": 0.8912,
       "recall": 0.9012,
-      "f1": 0.8957,
+      "f1": 0.8962,
       "avg_confidence": 0.5479,
       "safety_critical": false
     },
@@ -73,7 +73,7 @@
       "precision": 0.9381,
       "recall": 0.935,
       "f1": 0.9366,
-      "avg_confidence": 0.6321,
+      "avg_confidence": 0.6322,
       "safety_critical": false
     },
     "virginia_creeper_toxic": {
@@ -81,7 +81,7 @@
       "precision": 0.92,
       "recall": 0.9169,
       "f1": 0.9185,
-      "avg_confidence": 0.8193,
+      "avg_confidence": 0.8192,
       "safety_critical": true
     },
     "wild_grape_riverbank": {
@@ -93,5 +93,36 @@
       "safety_critical": false
     }
   },
-  "safety_warnings": []
+  "safety_warnings": [],
+  "toxic_as_edible_far": {
+    "aggregate": 0.0,
+    "per_class": {
+      "pokeweed_toxic": {
+        "false_accepts": 0,
+        "total": 800,
+        "far": 0.0
+      },
+      "poison_ivy": {
+        "false_accepts": 0,
+        "total": 800,
+        "far": 0.0
+      },
+      "virginia_creeper_toxic": {
+        "false_accepts": 0,
+        "total": 602,
+        "far": 0.0
+      },
+      "bittersweet_nightshade_toxic": {
+        "false_accepts": 0,
+        "total": 600,
+        "far": 0.0
+      },
+      "canada_moonseed_deadly": {
+        "false_accepts": 0,
+        "total": 600,
+        "far": 0.0
+      }
+    }
+  },
+  "lookalike_pairs": []
 }

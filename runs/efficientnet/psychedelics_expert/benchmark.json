@@ -1,7 +1,7 @@
 {
   "model": "psychedelics_expert",
   "arch": "tf_efficientnet_lite2",
-  "overall_accuracy": 0.9128,
+  "overall_accuracy": 0.9127,
   "val_samples": 6927,
   "per_class": {
     "amanita_muscaria_toxic": {
@@ -22,10 +22,10 @@
     },
     "conocybe_filaris_deadly": {
       "n": 355,
-      "precision": 0.814,
+      "precision": 0.8119,
       "recall": 0.8873,
-      "f1": 0.8491,
-      "avg_confidence": 0.7844,
+      "f1": 0.8479,
+      "avg_confidence": 0.7845,
       "safety_critical": true
     },
     "galerina_marginata_toxic": {
@@ -33,7 +33,7 @@
       "precision": 0.9269,
       "recall": 0.939,
       "f1": 0.9329,
-      "avg_confidence": 0.7279,
+      "avg_confidence": 0.7278,
       "safety_critical": true
     },
     "gymnopilus_junonius": {
@@ -41,15 +41,15 @@
       "precision": 0.9471,
       "recall": 0.94,
       "f1": 0.9435,
-      "avg_confidence": 0.6259,
+      "avg_confidence": 0.626,
       "safety_critical": false
     },
     "other_mushroom": {
       "n": 600,
-      "precision": 0.8824,
-      "recall": 0.8,
-      "f1": 0.8392,
-      "avg_confidence": 0.4794,
+      "precision": 0.8821,
+      "recall": 0.7983,
+      "f1": 0.8381,
+      "avg_confidence": 0.4793,
       "safety_critical": false
     },
     "panaeolus_cinctulus": {
@@ -65,7 +65,7 @@
       "precision": 0.986,
       "recall": 0.986,
       "f1": 0.986,
-      "avg_confidence": 0.6191,
+      "avg_confidence": 0.6192,
       "safety_critical": false
     },
     "psilocybe_azurescens": {
@@ -89,7 +89,7 @@
       "precision": 0.9549,
       "recall": 0.9167,
       "f1": 0.9354,
-      "avg_confidence": 0.54,
+      "avg_confidence": 0.5399,
       "safety_critical": false
     },
     "psilocybe_cyanescens": {
@@ -97,7 +97,7 @@
       "precision": 0.8694,
       "recall": 0.852,
       "f1": 0.8606,
-      "avg_confidence": 0.5151,
+      "avg_confidence": 0.515,
       "safety_critical": false
     },
     "psilocybe_ovoideocystidiata": {
@@ -105,7 +105,7 @@
       "precision": 0.8189,
       "recall": 0.8417,
       "f1": 0.8301,
-      "avg_confidence": 0.5582,
+      "avg_confidence": 0.5581,
       "safety_critical": false
     },
     "psilocybe_semilanceata": {
@@ -121,7 +121,33 @@
     {
       "class": "conocybe_filaris_deadly",
       "recall": 0.8873,
-      "precision": 0.814
+      "precision": 0.8119
     }
-  ]
+  ],
+  "toxic_as_edible_far": {
+    "aggregate": 0.0,
+    "per_class": {
+      "galerina_marginata_toxic": {
+        "false_accepts": 0,
+        "total": 1000,
+        "far": 0.0
+      },
+      "conocybe_filaris_deadly": {
+        "false_accepts": 0,
+        "total": 355,
+        "far": 0.0
+      },
+      "amanita_muscaria_toxic": {
+        "false_accepts": 0,
+        "total": 600,
+        "far": 0.0
+      },
+      "amanita_phalloides_deadly": {
+        "false_accepts": 0,
+        "total": 1000,
+        "far": 0.0
+      }
+    }
+  },
+  "lookalike_pairs": []
 }

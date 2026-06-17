@@ -33,6 +33,7 @@ class ModelHandle:
     network_group: object
     classes: list[str]
     energy_threshold: float | None = None  # p95 OOD rejection threshold (None = no OOD check)
+    energy_temperature: float = 1.0        # must match the T used during calibration
 
 
 class HailoModelLoader:
@@ -81,9 +82,12 @@ class HailoModelLoader:
         classes = json.load(open(manifest_path))["classes"]
 
         energy_threshold = None
+        energy_temperature = 1.0
         energy_path = os.path.join(self.models_dir, f"{name}_energy.json")
         if os.path.exists(energy_path):
-            energy_threshold = json.load(open(energy_path)).get("threshold_p95")
+            energy_cfg = json.load(open(energy_path))
+            energy_threshold = energy_cfg.get("threshold_p95")
+            energy_temperature = energy_cfg.get("temperature", 1.0)
 
         hef = HEF(hef_path)
         configure_params = ConfigureParams.create_from_hef(
@@ -94,7 +98,9 @@ class HailoModelLoader:
 
         ood_str = f"  OOD threshold: {energy_threshold:.4f}" if energy_threshold is not None else "  OOD threshold: none"
         print(f"  Loaded: {name}  ({len(classes)} classes)  {ood_str}")
-        return ModelHandle(name=name, network_group=ng, classes=classes, energy_threshold=energy_threshold)
+        return ModelHandle(name=name, network_group=ng, classes=classes,
+                           energy_threshold=energy_threshold,
+                           energy_temperature=energy_temperature)
 
     def _load_all(self):
         hef_files = sorted(

@@ -4,8 +4,11 @@ runner.py — Two-stage inference: domain router → expert routing.
 Stage 1: Run the domain router to classify the image into berry/mushroom/plant.
 Stage 2: Route to the relevant expert(s) based on the router's prediction.
 
-For mushroom domain, both highvalue_expert and psychedelics_expert run in
-parallel and the one with higher top_confidence wins.
+For domains served by more than one expert (mushroom, plant), every expert
+runs in parallel and ALL surviving predictions are returned. This layer does
+not pick a winner: a less-confident DEADLY verdict must be able to veto a more
+confident SAFE one, and that safety-aware resolution lives in
+convergence.build_result (deadly-vetoes-safe).
 """
 
 import numpy as np
@@ -38,6 +41,21 @@ class RawPrediction:
     top_confidence: float
 
 
+def _energy_score(logits: np.ndarray, temperature: float = 1.0) -> float:
+    """
+    Free-energy OOD score: E(x) = -T * logsumexp(logits / T).
+
+    Lower energy = in-distribution; higher = OOD candidate. Computed with the
+    numerically stable log-sum-exp (subtract the max, then add it back) so large
+    logits can't overflow np.exp to inf/nan and silently disable the OOD gate.
+    Must use the same temperature the threshold was calibrated with.
+    """
+    scaled = np.asarray(logits, dtype=np.float64) / temperature
+    m = float(np.max(scaled))
+    lse = m + float(np.log(np.sum(np.exp(scaled - m))))   # stable log-sum-exp
+    return float(-temperature * lse)
+
+
 def _infer_single(handle: ModelHandle, image: np.ndarray) -> RawPrediction | None:
     """
     Run one forward pass through a single model.
@@ -61,7 +79,7 @@ def _infer_single(handle: ModelHandle, image: np.ndarray) -> RawPrediction | Non
     # HEF outputs raw logits (exported with --no-activation).
     # Apply energy-based OOD check before softmax.
     if handle.energy_threshold is not None:
-        energy = -float(np.log(np.sum(np.exp(logits))))
+        energy = _energy_score(logits, handle.energy_temperature)
         if energy > handle.energy_threshold:
             print(f"  [{handle.name}] OOD rejected (energy={energy:.4f} > threshold={handle.energy_threshold:.4f})")
             return None
@@ -91,7 +109,7 @@ class AsyncRunner:
 
     Usage:
         runner = AsyncRunner(router_handle, expert_handles)
-        domain, prediction = runner.run(image)
+        domain, predictions = runner.run(image)
     """
 
     def __init__(
@@ -104,28 +122,34 @@ class AsyncRunner:
         self._experts  = experts
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
 
-    def run(self, image: np.ndarray) -> tuple[str, RawPrediction | None]:
+    def run(self, image: np.ndarray) -> tuple[str, list[RawPrediction]]:
         """
         Two-stage inference on a single image.
 
         Returns:
-            (domain, prediction) where prediction is None if the router
-            confidence is below threshold (unknown domain).
+            (domain, predictions) where predictions is the list of expert
+            predictions that survived the OOD gate. The list is empty when the
+            router abstains (low confidence / OOD) or no expert produced a
+            usable result. This layer does NOT select a winner — safety-aware
+            resolution (deadly-vetoes-safe) happens in convergence.build_result.
         """
         # ── Stage 1: Router ──────────────────────────────────────────────────
         router_pred = _infer_single(self._router, image)
+        if router_pred is None:
+            # Router OOD-rejected the frame — not a foraging target.
+            return "other", []
         domain     = router_pred.top_class
         confidence = router_pred.top_confidence
 
         print(f"  [router] {domain} @ {confidence:.1%}")
 
         if confidence < ROUTER_CONFIDENCE_THRESHOLD:
-            return domain, None
+            return domain, []
 
         # ── Stage 2: Route to expert(s) ──────────────────────────────────────
         expert_names = DOMAIN_EXPERTS.get(domain, [])
         if not expert_names:
-            return domain, None
+            return domain, []
 
         # Filter to experts that are actually loaded
         targets = {
@@ -136,21 +160,22 @@ class AsyncRunner:
 
         if not targets:
             print(f"  [runner] No loaded experts for domain '{domain}'")
-            return domain, None
+            return domain, []
 
         if len(targets) == 1:
             # Single expert — run directly
             name, handle = next(iter(targets.items()))
             try:
                 pred = _infer_single(handle, image)
-                if pred is None:
-                    return domain, None   # OOD rejected
-                return domain, pred
+                return domain, ([pred] if pred is not None else [])  # [] = OOD rejected
             except Exception as e:
                 print(f"  [runner] {name} inference error: {e}")
-                return domain, None
+                return domain, []
 
-        # Multiple experts — run in parallel, pick highest confidence
+        # Multiple experts — run all in parallel and return EVERY surviving
+        # prediction. We deliberately do not pick the most confident one here:
+        # a less-confident DEADLY verdict must be able to veto a confident SAFE
+        # one, and that resolution needs the safety metadata in convergence.py.
         futures = {
             self._executor.submit(_infer_single, handle, image): name
             for name, handle in targets.items()
@@ -166,12 +191,7 @@ class AsyncRunner:
             except Exception as e:
                 print(f"  [runner] {model_name} inference error: {e}")
 
-        if not results:
-            return domain, None
-
-        # Pick the expert with the highest top confidence
-        best = max(results, key=lambda r: r.top_confidence)
-        return domain, best
+        return domain, results
 
     def shutdown(self):
         self._executor.shutdown(wait=True)

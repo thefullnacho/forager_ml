@@ -71,9 +71,15 @@ def compute_energy(logits: np.ndarray, temperature: float = 1.0) -> np.ndarray:
 
     Lower energy = higher confidence in a known class.
     Higher energy = less familiar input (OOD candidate).
+
+    Uses the numerically stable log-sum-exp (subtract the row max, then add it
+    back) so large logits can't overflow np.exp. This must stay identical to
+    runner._energy_score so calibrated thresholds match inference exactly.
     """
     scaled = logits / temperature
-    return -temperature * np.log(np.sum(np.exp(scaled), axis=1))
+    m = np.max(scaled, axis=1, keepdims=True)
+    lse = m[:, 0] + np.log(np.sum(np.exp(scaled - m), axis=1))   # stable log-sum-exp
+    return -temperature * lse
 
 
 @torch.no_grad()

@@ -1,11 +1,16 @@
 """
 convergence.py — Build a single ForagerResult from the two-stage router pipeline.
 
-The domain router determines which expert to run. This module takes the
-router's domain prediction and the winning expert's RawPrediction and
-produces a single ForagerResult with species metadata and safety info.
+The domain router determines which expert(s) to run. This module takes the
+router's domain prediction and the surviving expert predictions and resolves
+them into a single ForagerResult with species metadata and safety info.
 
-Safety-first: DEADLY findings are always flagged prominently.
+Safety-first resolution (deadly-vetoes-safe): when a domain is served by more
+than one expert, a DEADLY verdict from any expert beats a non-deadly verdict
+even if the non-deadly one is more confident. This is the fix for the
+lily-of-the-valley failure mode — a confident "ramps" (SAFE) must never
+out-vote a cautious "deadly". Max-confidence is used only to break ties within
+a safety tier. DEADLY findings are always flagged prominently.
 """
 
 from dataclasses import dataclass
@@ -119,39 +124,61 @@ class ForagerResult:
 
 # ── Debug logging ─────────────────────────────────────────────────────────────
 
-def log_predictions(domain: str, prediction: RawPrediction | None):
+def log_predictions(domain: str, predictions: list[RawPrediction]):
     """Print raw model output for debugging."""
     print("\n  -- Router + expert prediction --------------------------")
     print(f"  Domain: {domain}")
-    if prediction is None:
-        print("  Expert: (none — router confidence below threshold)")
+    if not predictions:
+        print("  Expert: (none — router below threshold or OOD-rejected)")
     else:
-        pred = prediction
-        n_probs   = len(pred.probabilities)
-        n_classes = len(pred.classes)
-        print(f"  [{pred.model}]  output_size={n_probs}  classes={n_classes}", end="")
-        if n_probs != n_classes:
-            print(f"  MISMATCH", end="")
-        print()
-        top5_idx = np.argsort(pred.probabilities)[::-1][:5]
-        for idx in top5_idx:
-            label  = pred.classes[idx] if idx < n_classes else f"<unknown_idx_{idx}>"
-            marker = "+" if pred.probabilities[idx] >= CONFIDENCE_THRESHOLD else "-"
-            print(f"    {marker} {label:<45} {pred.probabilities[idx]:.1%}")
+        for pred in predictions:
+            n_probs   = len(pred.probabilities)
+            n_classes = len(pred.classes)
+            print(f"  [{pred.model}]  output_size={n_probs}  classes={n_classes}", end="")
+            if n_probs != n_classes:
+                print(f"  MISMATCH", end="")
+            print()
+            top5_idx = np.argsort(pred.probabilities)[::-1][:5]
+            for idx in top5_idx:
+                label  = pred.classes[idx] if idx < n_classes else f"<unknown_idx_{idx}>"
+                marker = "+" if pred.probabilities[idx] >= CONFIDENCE_THRESHOLD else "-"
+                print(f"    {marker} {label:<45} {pred.probabilities[idx]:.1%}")
     print("  -------------------------------------------------------\n")
+
+
+# ── Safety-aware resolution ────────────────────────────────────────────────────
+
+def _safety_of(prediction: RawPrediction) -> str:
+    """Safety tier of a prediction's top class (DEADLY when unknown — fail safe)."""
+    return SPECIES_METADATA.get(prediction.top_class, UNKNOWN_META)["safety"]
+
+
+def resolve(predictions: list[RawPrediction]) -> RawPrediction:
+    """
+    Pick the winning expert prediction (deadly-vetoes-safe).
+
+    Any DEADLY verdict beats a non-deadly one even when the non-deadly verdict
+    is more confident — this is the lily-of-the-valley fix. Within a tier the
+    most confident prediction wins. Assumes `predictions` is non-empty.
+    """
+    deadly = [p for p in predictions if _safety_of(p) == "DEADLY"]
+    pool   = deadly if deadly else predictions
+    return max(pool, key=lambda p: p.top_confidence)
 
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def build_result(domain: str, prediction: RawPrediction | None) -> ForagerResult:
+def build_result(domain: str, predictions: list[RawPrediction]) -> ForagerResult:
     """
-    Convert a domain + expert prediction into a single ForagerResult.
+    Resolve a domain + the surviving expert predictions into one ForagerResult.
 
-    If prediction is None (router confidence too low), returns an UNKNOWN result.
+    Resolution is deadly-vetoes-safe (see `resolve`). If `predictions` is empty
+    (router abstained or every expert was OOD-rejected), returns an UNKNOWN
+    result.
     """
-    log_predictions(domain, prediction)
+    log_predictions(domain, predictions)
 
-    if prediction is None:
+    if not predictions:
         return ForagerResult(
             domain=domain,
             species="unknown",
@@ -164,6 +191,7 @@ def build_result(domain: str, prediction: RawPrediction | None) -> ForagerResult
             expert_model="none",
         )
 
+    prediction = resolve(predictions)
     meta = SPECIES_METADATA.get(prediction.top_class, UNKNOWN_META)
     low  = prediction.top_confidence < LOW_CONFIDENCE_THRESHOLD
 

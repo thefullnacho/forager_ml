@@ -240,19 +240,28 @@ def main():
     ckpt_path = os.path.join(ckpt_dir, "best.pt")
     manifest_path = os.path.join(output_dir, f"{args.name}_classes.json")
 
-    if os.path.exists(manifest_path):
-        classes = json.load(open(manifest_path))["classes"]
-    elif os.path.exists(ckpt_path):
-        import torch
-        ckpt = torch.load(ckpt_path, map_location="cpu", weights_only=True)
-        classes = ckpt["classes"]
-    else:
-        # Derive from dataset directory
+    def _classes_from_dataset():
+        # ImageFolder sorts classes alphabetically, so sorted(dirs) matches the
+        # checkpoint's class order. This is torch-free — important because this
+        # script runs under hailo_build, which has no torch.
         dataset_dir = args.dataset
         if not os.path.isabs(dataset_dir):
             dataset_dir = os.path.join(repo_root, dataset_dir)
         scan_dir = os.path.join(dataset_dir, "train") if os.path.isdir(os.path.join(dataset_dir, "train")) else dataset_dir
-        classes = sorted(d for d in os.listdir(scan_dir) if os.path.isdir(os.path.join(scan_dir, d)))
+        return sorted(d for d in os.listdir(scan_dir) if os.path.isdir(os.path.join(scan_dir, d)))
+
+    if os.path.exists(manifest_path):
+        classes = json.load(open(manifest_path))["classes"]
+    else:
+        # Prefer the dataset (torch-free). Fall back to the checkpoint only if
+        # torch is importable in this env.
+        classes = _classes_from_dataset()
+        if not classes and os.path.exists(ckpt_path):
+            try:
+                import torch
+                classes = torch.load(ckpt_path, map_location="cpu", weights_only=True)["classes"]
+            except Exception as e:
+                print(f"  WARNING: could not load classes from checkpoint: {e}")
 
     manifest = {"model": args.name, "classes": classes}
     with open(manifest_path, "w") as f:

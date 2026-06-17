@@ -27,13 +27,14 @@ import argparse
 import os
 import sys
 import signal
+import time
 
 from pipeline.loader      import HailoModelLoader
 from pipeline.runner      import AsyncRunner
 from pipeline.convergence import build_result
 from pipeline.camera      import Camera
 from pipeline.display     import EinkDisplay
-from pipeline.voice       import VoiceTrigger, build_speech_message
+from pipeline.voice       import VoiceTrigger, build_speech_message, BOOT_MESSAGE, SCAN_CONFIRM
 
 
 DEFAULT_MODELS_DIR = os.path.join(os.path.dirname(__file__), "models")
@@ -67,25 +68,44 @@ def main():
 
     print(f"\nModels dir : {args.models_dir}")
 
-    voice   = None if args.no_voice   else VoiceTrigger()
     display = EinkDisplay()              # always construct; conditionally push
 
-    with HailoModelLoader(args.models_dir) as loader:
-        print(f"\nRouter : {loader.router.name}  ({len(loader.router.classes)} classes)")
-        print(f"Experts: {list(loader.experts)}")
+    with display:
+        # ── Splash screen — show while loading models ─────────────────────
+        if not args.no_display:
+            display.show_splash(vine_progress=0.0)
 
-        runner = AsyncRunner(loader.router, loader.experts)
+        voice = None if args.no_voice else VoiceTrigger()
 
-        with Camera() as cam:
-            with display:
+        if not args.no_display:
+            display.show_splash(vine_progress=0.35)
 
+        with HailoModelLoader(args.models_dir) as loader:
+            print(f"\nRouter : {loader.router.name}  ({len(loader.router.classes)} classes)")
+            print(f"Experts: {list(loader.experts)}")
+
+            if not args.no_display:
+                display.show_splash(vine_progress=0.7)
+
+            runner = AsyncRunner(loader.router, loader.experts)
+
+            with Camera() as cam:
+                # Final splash frame — vine fully grown
+                if not args.no_display:
+                    display.show_splash(vine_progress=1.0)
+                    time.sleep(1.5)  # hold the complete splash briefly
+                    display.show_ready()
+
+                # ── Boot announcement ─────────────────────────────────────
                 print("\nReady. ", end="")
                 if args.no_voice:
                     print("Press Enter to capture.")
                 else:
-                    print(f"Say a trigger word to capture.")
+                    print("Say a trigger word to capture.")
+                    if not args.no_tts and voice:
+                        voice.speak(BOOT_MESSAGE)
 
-                # ── Main loop ─────────────────────────────────────────────────
+                # ── Main loop ─────────────────────────────────────────────
                 while running:
                     # Step 1: wait for trigger
                     if args.no_voice:
@@ -99,6 +119,9 @@ def main():
                     if not running:
                         break
 
+                    # Quick voice confirmation + display update
+                    if not args.no_tts and voice:
+                        voice.speak(SCAN_CONFIRM)
                     if not args.no_display:
                         display.show_scanning()
 
@@ -106,10 +129,10 @@ def main():
                     image = cam.capture()
 
                     print("Running inference ...")
-                    domain, prediction = runner.run(image)
+                    domain, predictions = runner.run(image)
 
                     print("Building result ...")
-                    result = build_result(domain, prediction)
+                    result = build_result(domain, predictions)
 
                     # ── Log to terminal ───────────────────────────────────────
                     print("\n" + "-" * 40)
@@ -146,7 +169,7 @@ def main():
                     else:
                         print("Say a trigger word to capture.")
 
-        runner.shutdown()
+            runner.shutdown()
 
     print("Done.")
 
