@@ -1,5 +1,12 @@
 # Forager ML
 
+> **Part of the Forager constellation.** This repo trains the model stack; the public Space
+> (`forager-field-station`) serves a subset of it, and the Homesteader Labs site sells the
+> hardware it runs on. Cross-project knowledge — the canonical model registry, the dev box / CUDA
+> gotchas, and known divergences (e.g. the psychedelics-expert and router-version splits) — lives
+> in the **Forager wiki** at `~/Documents/Forager/forager-wiki/` (start at `index.md`). Update it
+> when a change crosses repos.
+
 Real-time plant and fungi identification for edge deployment on a **Hailo 8L NPU** (Raspberry Pi 5). A domain router plus four expert classifiers — all `tf_efficientnet_lite2` (~4.9M params each) — run a two-stage pipeline: the router picks the domain, the relevant expert(s) classify, and results are resolved **deadly-vetoes-safe** before being pushed to an eInk display with optional voice trigger and TTS. All models output raw logits so softmax, energy-based OOD rejection, and confidence gating run on the Pi 5 CPU.
 
 > **Architecture note:** earlier iterations used YOLOv8n-cls classifiers and a max-confidence voting layer. Both are gone. The shipped stack is EfficientNet-Lite2 with a router and deadly-vetoes-safe resolution (see [Convergence Logic](#convergence-logic)). Some `runs/classify/` artifacts and `convert_yolo_to_hef.py` remain from the YOLO era and are legacy.
