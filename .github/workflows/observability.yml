@@ -1,0 +1,40 @@
+name: observability
+
+on:
+  push:
+    paths:
+      - "observability/**"
+      - "inference/pipeline/safety.py"
+      - ".github/workflows/observability.yml"
+  pull_request:
+    paths:
+      - "observability/**"
+      - "inference/pipeline/safety.py"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: forager
+          POSTGRES_DB: forager_obs
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      FORAGER_OBS_DSN: postgresql://postgres:forager@localhost:5433/forager_obs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install deps
+        run: pip install -r observability/requirements.txt
+      - name: Run tests (schema, writer, views, resolution logic)
+        run: python -m pytest observability/tests/ -q

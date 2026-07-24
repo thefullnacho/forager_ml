@@ -1,0 +1,16 @@
+# Local Postgres for the observability harness.
+#   docker compose -f observability/docker-compose.yml up -d
+# Then: FORAGER_OBS_DSN defaults to this instance (port 5433).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: forager
+      POSTGRES_DB: forager_obs
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 15
