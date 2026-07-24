@@ -10,9 +10,10 @@ early warning of data drift you want to see before accuracy visibly drops.
 
 ## What it records
 
-- **`inference_runs`** — one row per image: router decision, resolved species,
-  safety tier, whether it abstained, whether deadly-vetoes-safe fired, and
-  `toxic_as_edible` (predicted edible on a truly-DEADLY item).
+- **`inference_runs`** — one row per inference: router decision, resolved
+  species, safety tier, whether it abstained, whether deadly-vetoes-safe fired,
+  and `toxic_as_edible` (predicted edible on a truly-DEADLY item). Currently
+  single-shot (K=1); see the two-photo note below.
 - **`expert_predictions`** — one row per expert invoked: top class, confidence,
   and the **energy score** (the drift signal the live pipeline currently prints
   and discards).
@@ -50,15 +51,32 @@ Then query the analytical views (`views.sql`):
 - `v_deadly_veto` — how often the safety layer changed the answer
 - `v_calibration` — confidence decile vs. actual accuracy
 
-## Known finding (first run, ONNX-CPU, berry val set)
+## What single-shot measures (and why the product uses two photos)
 
-The harness immediately surfaced a real gap: the **berry domain has a single
-expert**, so deadly-vetoes-safe (which needs two experts) can't protect it, and
-the berry expert's energy OOD gate has `auroc 0.2477` and never fires. On the
-ONNX-float path, that left a handful of `canada_moonseed`/`pokeweed` images
-resolving to edible. Whether the calibrated int8 HEF closes this on-device is
-the exact question this harness now makes answerable — run the Hailo source over
-the same set and compare `v_safety_regression`.
+This harness currently runs **single-image (K=1)** inference. On the berry val
+set that surfaces a real single-shot risk: ~1% of DEADLY specimens
+(`canada_moonseed`, `pokeweed`) resolve to an edible tier. That is not a bug —
+it is precisely the residual the **two-photo protocol exists to eliminate.**
+
+The shipped product (forager-field-station) asks for a **second photo when the
+first is not decisive**, then fuses the shots by geometric mean and requires
+consensus (both photos independently pick the same class) before clearing the
+0.60 gate — otherwise it abstains. `scripts/multiview_smoketest.py` in that repo
+measures the payoff on the same val data:
+
+| K (photos) | berry top-1 | DEADLY-shown-edible |
+|---|---|---|
+| 1 | 95.3% | 1.12% |
+| 2 | 98.9% | **0.00%** |
+| 3 | 99.9% | 0.00% |
+
+So the "0.0 toxic-as-edible" claim is a **two-photo** claim, and it holds. The
+single-shot number this harness reports is the useful complement: it quantifies
+exactly how much safety the second photo is buying.
+
+**Next:** add a multiview (K-photo, product-fusion + consensus) mode so
+`v_safety_regression` measures the real two-photo operating point continuously,
+with K=1 kept as the "what the second photo saves you from" baseline.
 
 ## Tests
 
