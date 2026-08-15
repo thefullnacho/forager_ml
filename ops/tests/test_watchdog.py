@@ -44,6 +44,48 @@ def test_run_name_comes_from_the_command_line():
     assert status._arg_value(cmd, "--missing") is None
 
 
+# --- wait-for (what the retrain scripts call instead of waiting on PIDs) ----
+
+def test_wait_for_returns_immediately_when_nothing_runs(monkeypatch):
+    monkeypatch.setattr(status, "live_jobs", lambda: [])
+    assert status.wait_for("download", poll=0) == 0
+
+
+def test_wait_for_blocks_until_the_job_clears(monkeypatch):
+    calls = {"n": 0}
+
+    def fake_jobs():
+        calls["n"] += 1
+        return [{"kind": "download", "name": "berry_pull_inat", "elapsed_s": 60}] \
+            if calls["n"] < 3 else []
+
+    monkeypatch.setattr(status, "live_jobs", fake_jobs)
+    monkeypatch.setattr(status, "datasets", lambda: [{"name": "d", "images": 1}])
+    monkeypatch.setattr(status.time, "sleep", lambda s: None)
+    assert status.wait_for("download", poll=0) == 0
+    assert calls["n"] == 3
+
+
+def test_wait_for_ignores_other_kinds(monkeypatch):
+    """A training run must not hold up a script waiting on downloads."""
+    monkeypatch.setattr(status, "live_jobs",
+                        lambda: [{"kind": "specialist", "name": "berry_expert",
+                                  "elapsed_s": 60}])
+    assert status.wait_for("download", poll=0) == 0
+
+
+def test_wait_for_times_out_rather_than_hanging_forever(monkeypatch):
+    monkeypatch.setattr(status, "live_jobs",
+                        lambda: [{"kind": "download", "name": "stuck", "elapsed_s": 9}])
+    monkeypatch.setattr(status, "datasets", lambda: [])
+    monkeypatch.setattr(status.time, "sleep", lambda s: None)
+    assert status.wait_for("download", poll=0, timeout=-1) == 124
+
+
+def test_training_group_covers_both_trainers():
+    assert set(status._KIND_GROUPS["training"]) == {"specialist", "router"}
+
+
 # --- log classification ----------------------------------------------------
 
 def test_clean_log_is_ok(tmp_path):

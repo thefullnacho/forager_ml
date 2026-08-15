@@ -23,6 +23,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -366,10 +367,64 @@ def render(snap: dict) -> str:
     return "\n".join(L)
 
 
+#: --wait-for groups. "training" covers both trainer entry points.
+_KIND_GROUPS = {
+    "download": ("download",),
+    "specialist": ("specialist",),
+    "router": ("router",),
+    "training": ("specialist", "router"),
+    "any": ("download", "specialist", "router"),
+}
+
+
+def wait_for(kind: str, poll: int = 60, timeout: int = 0) -> int:
+    """Block until no job of ``kind`` is running. Returns 0, or 124 on timeout.
+
+    Exists so the retrain scripts can wait on *what is running* rather than on
+    PID literals. `retrain_v2.sh` previously did:
+
+        for pid in 1238285 1238290 1238583; do
+            if kill -0 "$pid"; then wait "$pid" || true; fi
+        done
+
+    which had two independent faults. The PIDs went stale at the first reboot,
+    after which the guard fails open and training starts immediately. And even
+    while they were alive, `wait` only works on children of the calling shell —
+    those downloads were not — so it returned an error instantly that `|| true`
+    swallowed. That wait never waited, on any run.
+    """
+    kinds = _KIND_GROUPS[kind]
+    started = time.time()
+    while True:
+        running = [j for j in live_jobs() if j["kind"] in kinds]
+        if not running:
+            print(f"wait-for {kind}: clear")
+            return 0
+        if timeout and (time.time() - started) > timeout:
+            print(f"wait-for {kind}: TIMED OUT after {timeout}s with "
+                  f"{len(running)} still running", file=sys.stderr)
+            return 124
+        # Dataset counts move even when a downloader logs nothing, so this line
+        # is the progress signal the old scripts printed against a fixed target.
+        sizes = {d["name"]: d["images"] for d in datasets()}
+        detail = ", ".join(f"{j['name']} {j['elapsed_s'] // 60}m" for j in running)
+        print(f"wait-for {kind}: {len(running)} running ({detail}); "
+              f"images={sum(sizes.values())}", flush=True)
+        time.sleep(poll)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="forager_ml status readout")
     ap.add_argument("--json", action="store_true", help="emit the raw snapshot")
+    ap.add_argument("--wait-for", choices=sorted(_KIND_GROUPS),
+                    help="block until no job of this kind is running, then exit 0")
+    ap.add_argument("--poll", type=int, default=60, help="seconds between checks (--wait-for)")
+    ap.add_argument("--timeout", type=int, default=0, help="0 = wait forever (--wait-for)")
     args = ap.parse_args(argv)
+
+    if args.wait_for:
+        return wait_for(args.wait_for, poll=args.poll, timeout=args.timeout)
+
     snap = snapshot()
     print(json.dumps(snap, indent=2) if args.json else render(snap))
     return 0

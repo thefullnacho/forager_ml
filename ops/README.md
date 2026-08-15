@@ -5,6 +5,7 @@ Two commands over one collector.
 ```bash
 python -m ops.status            # human readout: jobs, runs, datasets, GPUs, disk
 python -m ops.status --json     # the same snapshot, machine-readable
+python -m ops.status --wait-for download   # block until no download is running
 python -m ops.watchdog          # one pass; notifies only on a transition
 python -m ops.watchdog --dry-run  # print what it would send, send nothing
 ```
@@ -40,6 +41,35 @@ Three failure modes, all of which had already happened:
 Nothing here persists a PID. Every pass derives the job set from live command
 lines, so a run started long after the watchdog was installed is picked up with
 no config change.
+
+## `--wait-for`: the third consumer of the same detector
+
+`retrain_v2.sh` and `retrain_router.sh` used to block on PID literals. Both now
+call `python -m ops.status --wait-for download`, which polls the same
+live-command-line detector, so they need no PIDs and pick up downloads started
+after the script did.
+
+```
+--wait-for {download,specialist,router,training,any}
+--poll SECONDS     # default 60
+--timeout SECONDS  # 0 = forever; exits 124 on timeout
+```
+
+`retrain_v2.sh`'s old version was broken two independent ways:
+
+```bash
+for pid in 1238285 1238290 1238583; do
+    if kill -0 "$pid"; then wait "$pid" || true; fi   # both faults, one line
+done
+```
+
+1. Stale PIDs make `kill -0` fail, the guard falls through, and training starts
+   instantly on a half-downloaded dataset **while looking like it worked**.
+2. Even with live PIDs, `wait` only works on children of the calling shell.
+   Those downloads were started separately, so `wait` errored immediately and
+   `|| true` swallowed it. **That wait never waited, on any run.**
+   `retrain_router.sh` knew this — its comment says so, and it polls `kill -0`
+   instead — which is how the two scripts came to disagree.
 
 ## What the watchdog notifies on
 
@@ -94,7 +124,7 @@ box itself is already covered by hestia's off-site probe.
 ## Tests
 
 ```bash
-python -m pytest ops/tests/ -q      # 24 tests, no GPU, no DB, no training run
+python -m pytest ops/tests/ -q      # 29 tests, no GPU, no DB, no training run
 ```
 
 They pin the behaviours the old script got wrong: identifying a job without a

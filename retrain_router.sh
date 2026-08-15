@@ -7,10 +7,13 @@
 # rebuilds it properly with all 4 classes (berry / mushroom / plant / other).
 #
 # Prerequisites:
-#   data/acquisition/other_pull_inat.py must have run (PID 1258691).
+#   data/acquisition/other_pull_inat.py must have run.
 #
 # Run from repo root:
 #   bash retrain_router.sh
+#
+# Safe to start at any time: if no downloads are running it goes straight to the
+# rebuild; if some are, it blocks until they finish.
 
 set -euo pipefail
 export CUDA_VISIBLE_DEVICES=1
@@ -19,24 +22,17 @@ echo "========================================================"
 echo "  retrain_router.sh — waiting for 'other' download..."
 echo "========================================================"
 
-# Wait for other class download (PID 1258691)
-# Note: use kill -0 polling — wait only works on child processes of this shell
-OTHER_PID=1258691
-while kill -0 "$OTHER_PID" 2>/dev/null; do
-    count=$(find inat_dataset/other -name "*.jpg" 2>/dev/null | wc -l)
-    echo "  Waiting for other_pull_inat.py (PID $OTHER_PID) — ${count}/19000 images..."
-    sleep 30
-done
-echo "  other_pull_inat.py done."
-
-# Also wait for medicinals download if still running (PID 1255794)
-MED_PID=1255794
-while kill -0 "$MED_PID" 2>/dev/null; do
-    count=$(find medicinals_dataset -name "*.jpg" 2>/dev/null | wc -l)
-    echo "  Waiting for medicinals_pull_inat.py (PID $MED_PID) — ${count}/76000 images..."
-    sleep 60
-done
-echo "  medicinals_pull_inat.py done."
+# Wait on WHAT IS RUNNING, not on PID literals (this previously polled 1258691
+# and 1255794, both long dead — after which the loops exit instantly and the
+# rebuild runs on whatever happens to be on disk). The `kill -0` polling here
+# was at least correct in form, unlike retrain_v2.sh's `wait`, which cannot work
+# on a non-child process at all.
+#
+# `ops.status --wait-for` uses the same live-command-line detector as the status
+# readout and the watchdog, so it needs no PIDs and catches any downloader —
+# other_pull_inat, medicinals_pull_inat, mushroom_observer_pull — including ones
+# started after this script did.
+python -m ops.status --wait-for download --poll 30
 
 echo ""
 echo "Downloads complete. Rebuilding router dataset..."
