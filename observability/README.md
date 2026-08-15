@@ -33,10 +33,24 @@ The event schema and analytics don't care where predictions come from:
 The safety metadata (which species is DEADLY) is imported from the single source
 of truth, `inference/pipeline/safety.py`, never copied.
 
+## Shared with the Field Station
+
+`connect`/`migrate`, the ImageFolder val-set walk, the batch-writer contract,
+and above all the **`toxic_as_edible` rule** live in
+[`forager-obs`](../../forager-obs), a sibling checkout shared with
+forager-field-station. Both repos previously had their own copy of that rule;
+one flagship 0.0 claim resting on two implementations is one that can drift and
+still read green in both dashboards.
+
+What stays here: this repo's schema, views, writer SQL, and the label -> tier
+lookup (`inference/pipeline/safety.py` is still the single source of truth for
+which species is DEADLY).
+
 ## Run it
 
 ```bash
-docker compose -f observability/docker-compose.yml up -d
+pip install -r observability/requirements.txt   # from the repo root; pulls in ../forager-obs
+docker compose -f observability/docker-compose.yml up -d   # Postgres on 5433
 python -m observability.batch_runner \
     --val-dir berry_dataset_split/val \
     --model-version "dev-$(git rev-parse --short HEAD)" \

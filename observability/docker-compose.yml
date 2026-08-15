@@ -1,6 +1,11 @@
 # Local Postgres for the observability harness.
 #   docker compose -f observability/docker-compose.yml up -d
 # Then: FORAGER_OBS_DSN defaults to this instance (port 5433).
+# Explicit project name: Compose otherwise derives it from the parent
+# directory, which is "observability" in both Forager repos, so the second
+# `up` would RECREATE the first repo's container instead of its own.
+name: forager-ml-obs
+
 services:
   db:
     image: postgres:16

@@ -56,13 +56,14 @@ class InferenceOutcome:
         """The only error that truly matters: the pipeline called something
         edible/safe when the ground truth is a DEADLY class.
 
-        Ground-truth toxicity is read from the safety metadata (single source of
-        truth), not guessed from the label string.
+        The RULE lives in ``forager_obs.verdict`` and is shared with the Field
+        Station, so the flagship 0.0 claim cannot quietly come to mean two
+        different things in two dashboards. What stays local is the
+        label -> tier lookup, because the metadata table is this repo's.
         """
+        from forager_obs import is_toxic_as_edible
+
         from .safety_meta import safety_of
 
-        if self.ground_truth is None:
-            return False
-        truth_is_deadly = safety_of(self.ground_truth) == "DEADLY"
-        predicted_edible = self.safety_tier in ("SAFE", "CAUTION")
-        return truth_is_deadly and predicted_edible and not self.abstained
+        truth_tier = None if self.ground_truth is None else safety_of(self.ground_truth)
+        return is_toxic_as_edible(truth_tier, self.safety_tier, self.abstained)

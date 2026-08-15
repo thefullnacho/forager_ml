@@ -3,20 +3,19 @@ same outcome whether it came from Hailo or ONNX-on-CPU."""
 
 from __future__ import annotations
 
-import uuid
-
-import psycopg
+from forager_obs import BaseWriter
 
 from .outcome import InferenceOutcome
 
 
-class EventWriter:
+class EventWriter(BaseWriter):
     """Writes one inference_runs row + N expert_predictions rows per outcome,
-    all tagged with a shared run_id for the batch."""
+    all tagged with a shared run_id for the batch.
 
-    def __init__(self, conn: psycopg.Connection, run_id: uuid.UUID | None = None):
-        self.conn = conn
-        self.run_id = run_id or uuid.uuid4()
+    The connection, the run_id, and commit/rollback come from BaseWriter; the
+    SQL stays here because this repo's grain (per image, plus a child row per
+    expert) is not the Field Station's (per multi-photo session).
+    """
 
     def write(self, o: InferenceOutcome) -> int:
         row = self.conn.execute(
@@ -57,6 +56,3 @@ class EventWriter:
                  e.energy_score, e.ood_rejected),
             )
         return run_pk
-
-    def commit(self) -> None:
-        self.conn.commit()

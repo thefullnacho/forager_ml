@@ -30,11 +30,26 @@ jobs:
     env:
       FORAGER_OBS_DSN: postgresql://postgres:forager@localhost:5433/forager_obs
     steps:
+      # Two checkouts side by side, because observability/requirements.txt
+      # installs the shared package as `-e ../forager-obs`. Actions cannot check
+      # out above the workspace, so this repo goes in a subdirectory too and the
+      # later steps set working-directory.
       - uses: actions/checkout@v4
+        with:
+          path: forager_ml
+      - uses: actions/checkout@v4
+        with:
+          repository: thefullnacho/forager-obs
+          path: forager-obs
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - name: Install deps
+      - name: Install deps (incl. editable forager-obs)
+        working-directory: forager_ml
         run: pip install -r observability/requirements.txt
+      - name: Shared safety rules (no DB, no models)
+        working-directory: forager-obs
+        run: python -m pytest -q
       - name: Run tests (schema, writer, views, resolution logic)
+        working-directory: forager_ml
         run: python -m pytest observability/tests/ -q

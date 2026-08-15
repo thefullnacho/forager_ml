@@ -17,22 +17,11 @@ import argparse
 import sys
 from pathlib import Path
 
+from forager_obs import iter_images
+
 from .db import connect, migrate
 from .onnx_pipeline import OnnxPipeline
 from .writer import EventWriter
-
-_IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp"}
-
-
-def iter_images(val_dir: Path, max_per_class: int) -> list[tuple[str, str]]:
-    """Return (image_path, ground_truth_label) pairs from an ImageFolder tree."""
-    pairs: list[tuple[str, str]] = []
-    for class_dir in sorted(p for p in val_dir.iterdir() if p.is_dir()):
-        imgs = sorted(p for p in class_dir.iterdir() if p.suffix.lower() in _IMG_EXTS)
-        if max_per_class:
-            imgs = imgs[:max_per_class]
-        pairs.extend((str(p), class_dir.name) for p in imgs)
-    return pairs
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -58,7 +47,9 @@ def main(argv: list[str] | None = None) -> int:
         writer = EventWriter(conn)
         n_toxic = 0
         for i, (path, truth) in enumerate(pairs, 1):
-            outcome = pipeline.run(path, ground_truth=truth)
+            # str(): iter_images yields Path, but image_ref is a TEXT column and
+            # psycopg has no adapter for PosixPath.
+            outcome = pipeline.run(str(path), ground_truth=truth)
             writer.write(outcome)
             n_toxic += int(outcome.toxic_as_edible)
             if i % 25 == 0:

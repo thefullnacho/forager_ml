@@ -3,3 +3,6 @@ pillow
 onnxruntime
 psycopg[binary]
 pytest
+# Shared with forager-field-station: connect/migrate, the val-set walk, and the
+# safety verdict rules (toxic_as_edible). Sibling checkout, editable.
+-e ../forager-obs
