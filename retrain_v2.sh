@@ -34,6 +34,16 @@ echo "========================================================"
 # started after this script did.
 python -m ops.status --wait-for download --poll 60
 
+# Each training run tees to logs/<name>.log, which is where ops/watchdog.py looks
+# (FORAGER_LOG_DIR) to decide whether a finished run succeeded or died. Without a
+# log the watchdog reports "ended, unverified" rather than done -- deliberately,
+# since believing a failed overnight run is the expensive mistake.
+#
+# `set -o pipefail` is on above, so a python failure still fails the script
+# despite the pipe into tee.
+LOG_DIR="${FORAGER_LOG_DIR:-logs}"
+mkdir -p "$LOG_DIR"
+
 echo ""
 echo "Downloads complete. Rebuilding dataset splits..."
 
@@ -48,7 +58,7 @@ echo "========================================================"
 python training/scripts/train_efficientnet_specialist.py \
     --dataset psychedelics_dataset_split \
     --name psychedelics_expert \
-    --epochs 60
+    --epochs 60 2>&1 | tee "$LOG_DIR/psychedelics_expert.log"
 
 echo ""
 echo "========================================================"
@@ -57,7 +67,7 @@ echo "========================================================"
 python training/scripts/train_efficientnet_specialist.py \
     --dataset berry_dataset_split \
     --name berry_expert \
-    --epochs 60
+    --epochs 60 2>&1 | tee "$LOG_DIR/berry_expert.log"
 
 echo ""
 echo "========================================================"
@@ -71,7 +81,8 @@ echo "========================================================"
 for expert in psychedelics berry; do
     python training/scripts/benchmark_expert.py \
         --checkpoint "runs/efficientnet/${expert}_expert/best.pt" \
-        --dataset "${expert}_dataset_split"
+        --dataset "${expert}_dataset_split" 2>&1 \
+        | tee -a "$LOG_DIR/${expert}_expert.log"
 done
 
 echo ""

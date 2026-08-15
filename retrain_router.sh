@@ -34,6 +34,16 @@ echo "========================================================"
 # started after this script did.
 python -m ops.status --wait-for download --poll 30
 
+# The training run tees to logs/<name>.log, which is where ops/watchdog.py looks
+# (FORAGER_LOG_DIR) to decide whether a finished run succeeded or died. Without a
+# log the watchdog reports "ended, unverified" rather than done -- deliberately,
+# since believing a failed overnight run is the expensive mistake.
+#
+# `set -o pipefail` is on above, so a python failure still fails the script
+# despite the pipe into tee.
+LOG_DIR="${FORAGER_LOG_DIR:-logs}"
+mkdir -p "$LOG_DIR"
+
 echo ""
 echo "Downloads complete. Rebuilding router dataset..."
 python training/scripts/build_router_dataset.py
@@ -45,7 +55,7 @@ echo "========================================================"
 python training/scripts/train_domain_router.py \
     --dataset router_dataset \
     --name domain_router_v2 \
-    --epochs 60
+    --epochs 60 2>&1 | tee "$LOG_DIR/domain_router_v2.log"
 
 echo ""
 echo "========================================================"
@@ -53,7 +63,7 @@ echo "  Benchmarking router v2"
 echo "========================================================"
 python training/scripts/benchmark_router.py \
     --checkpoint runs/efficientnet/domain_router_v2/best.pt \
-    --dataset router_dataset
+    --dataset router_dataset 2>&1 | tee -a "$LOG_DIR/domain_router_v2.log"
 
 echo ""
 echo "========================================================"
