@@ -8,6 +8,17 @@ true inside this repo.
 
 ---
 
+## 2026-08-24 — observability branch confirmed green, merging to main
+
+Both GitHub workflows have now run on a real push and succeeded: `ops.yml` twice
+(2026-08-15, and again on the `convergence_drift` commit below), `observability.yml`
+once (2026-08-15) -- the first real-push test of the cross-repo checkout
+(`thefullnacho/forager-obs` beside this repo), which the prior entry flagged as
+"verified but has not yet run on a real push." That was the condition this branch
+was waiting on. Merging `observability` into `main`.
+
+---
+
 ## 2026-08-24 — convergence_drift: a check for the thing the last entry left undone
 
 The 2026-08-15 entry named `convergence.py` as still hand-ported between this repo
