@@ -1,0 +1,13 @@
+[Unit]
+Description=forager_ml job watchdog — every 5 minutes
+
+[Timer]
+# 2min after boot so a job that was running before a reboot is noticed as gone
+# rather than silently forgotten.
+OnBootSec=2min
+OnUnitActiveSec=5min
+# Do not fire a burst of catch-up passes after the machine wakes from suspend.
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

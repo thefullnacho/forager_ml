@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Convergence-constant drift check. Local only: it reads a sibling
+# forager-field-station checkout, which has no GitHub remote, so this cannot
+# run in ops.yml/observability.yml. Install: cp ops/hooks/pre-commit .git/hooks/
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+python3 -m ops.convergence_drift

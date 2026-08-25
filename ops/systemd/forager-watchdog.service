@@ -1,0 +1,33 @@
+[Unit]
+Description=forager_ml — job watchdog (did the training run finish, or die?)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Documents/Forager/forager_ml
+
+# Required. No baked-in default, on purpose: a scrubbed placeholder deploys
+# silently and looks like it is working. Use a long random topic -- ntfy topics
+# are public to anyone who guesses the name.
+Environment=FORAGER_NTFY_URL=https://ntfy.sh/CHANGE-ME-RANDOM-TOPIC
+
+# Where to look for a finished job's log, matched by name substring
+# (e.g. berry_expert.log). Point this at wherever the retrain scripts tee.
+# NOTE /tmp is cleared on reboot, so a run that ends across a boot reports as
+# "ended, unverified" rather than done -- pick a persistent directory if that
+# matters to you.
+Environment=FORAGER_LOG_DIR=%h/Documents/Forager/forager_ml/logs
+
+# Free-space floor, percent. The box holds ~1.8TB of datasets.
+Environment=FORAGER_DISK_FLOOR_PCT=10
+
+# A live job whose checkpoint has not advanced in this many hours is reported
+# as possibly stalled. Raise it above your slowest legitimate epoch time.
+Environment=FORAGER_STALL_HOURS=6
+
+ExecStart=/usr/bin/env python3 -m ops.watchdog
+
+# One pass, then exit. Failing the pass should not be silent.
+StandardOutput=journal
+StandardError=journal
