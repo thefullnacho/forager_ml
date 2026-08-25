@@ -114,6 +114,39 @@ so a run that ends across a boot reports as "ended, unverified" rather than
 done. The unit ships pointing at `forager_ml/logs/` (gitignored); have the
 retrain scripts tee there.
 
+## `convergence_drift`: catching the hand-port silently disagreeing
+
+```bash
+python -m ops.convergence_drift
+```
+
+`convergence.py` is hand-ported between this repo and the Field Station (see
+STATUS.md, 2026-08-15) -- two different implementations by design, so a whole-file
+diff is permanently red and tells you nothing. What actually matters is the named
+safety constants (`DEADLY_VETO_FLOOR`, `EXPERT_CONFIDENCE_THRESHOLD`,
+`LOW_CONFIDENCE_THRESHOLD`, ...). This walks both files' ASTs and separates two
+cases:
+
+- **DIVERGENCE** -- a constant exists on only one side. Reported, does not fail.
+  Known and visible; today that's `DEADLY_VETO_FLOOR`, `EXPERT_CONFIDENCE_THRESHOLD`,
+  `CONFIDENCE_THRESHOLD`.
+- **DRIFT** -- the *same* constant holds two different values on each side. Fails
+  the check. This is the dangerous case: it reads green in both repos and nothing
+  says otherwise, the exact failure mode `forager-obs` was extracted to close for
+  `toxic_as_edible`.
+
+**Local only, not in GitHub Actions.** It reads a sibling `forager-field-station`
+checkout by path (`../forager-field-station`, override with `FORAGER_FS_PATH`),
+and that repo has no GitHub remote, so ops.yml/observability.yml can't check it
+out. Install as a pre-commit hook instead:
+
+```bash
+cp ops/hooks/pre-commit .git/hooks/pre-commit
+```
+
+Skips cleanly (exit 0, one line) if no Field Station checkout is found at the
+expected path -- never blocks a commit on a machine that doesn't have both repos.
+
 ## Not ported: running off-site
 
 Hestia's watchdog runs on the dedi and probes the house, because the failure it
@@ -124,7 +157,8 @@ box itself is already covered by hestia's off-site probe.
 ## Tests
 
 ```bash
-python -m pytest ops/tests/ -q      # 29 tests, no GPU, no DB, no training run
+python -m pytest ops/tests/ -q      # 36 tests, no GPU, no DB, no training run
+                                     # (one skips without a sibling Field Station checkout)
 ```
 
 They pin the behaviours the old script got wrong: identifying a job without a

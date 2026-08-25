@@ -8,6 +8,30 @@ true inside this repo.
 
 ---
 
+## 2026-08-24 — convergence_drift: a check for the thing the last entry left undone
+
+The 2026-08-15 entry named `convergence.py` as still hand-ported between this repo
+and the Field Station and left it that way on purpose. It had already drifted:
+Field Station's copy gates the deadly veto behind `DEADLY_VETO_FLOOR` (0.40) and
+gates committing to a non-deadly call behind `EXPERT_CONFIDENCE_THRESHOLD` (0.60);
+this repo's copy has neither, only the older `CONFIDENCE_THRESHOLD`/
+`LOW_CONFIDENCE_THRESHOLD` pair. Nobody had cross-referenced the two files since.
+
+`ops/convergence_drift.py` parses both files' ASTs and separates two cases: a
+constant on only one side (DIVERGENCE, reported, doesn't fail -- that's today's
+actual state) from the same constant holding two different values (DRIFT, fails)
+-- the second is the dangerous one, the `toxic_as_edible` failure mode from last
+entry, just for this file instead. Installed as a local pre-commit hook
+(`ops/hooks/pre-commit`) since the Field Station repo has no GitHub remote and
+can't be checked out by ops.yml/observability.yml. 7 new tests, 36 total in `ops/`.
+
+Not a fix for the hand-porting itself -- still "Not done, on purpose" below --
+just a check that the next silent split gets caught at commit time instead of by
+manually diffing two files months later, which is how the two constants above
+went unnoticed in the first place.
+
+---
+
 ## 2026-08-15 — shared observability package, and the end of the PID scripts
 
 Two pieces of ops debt closed, both found by a primitives audit across the constellation
